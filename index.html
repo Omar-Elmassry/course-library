@@ -274,6 +274,60 @@ nav.toc ol.secs a{font-size:14px;padding:4px 8px}
 .chapnav a small{display:block;color:var(--muted);font-size:13px;margin-bottom:2px}
 .chapnav a:hover{border-color:var(--accent)}
 .chapnav .next{margin-left:auto;text-align:right}
+
+/* ---------- responsive / mobile ---------- */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+article>*{min-width:0}
+pre,.plate,.tablewrap{max-width:100%}
+.plate,.tablewrap,pre{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+figure.fs-fallback{height:100dvh}
+figure.is-fs .dg{max-height:calc(100dvh - 110px)}
+figure.is-fs:has(.controls) .dg,figure.is-fs:has(.events) .dg{max-height:calc(100dvh - 290px)}
+@media (max-width:1000px){
+  nav.toc{height:calc(100dvh - var(--bar));overscroll-behavior:contain}
+}
+@media (max-width:700px){
+  main{padding:24px 16px 80px}
+  h1{font-size:calc(var(--fs)*1.75);overflow-wrap:anywhere}
+  h2{font-size:calc(var(--fs)*1.3);gap:.4em}
+  h3{font-size:calc(var(--fs)*1.02)}
+  .lede{font-size:calc(var(--fs)*1.05)}
+  section.chap{margin-top:2.5em}
+  p,li,td,th,figcaption,.note{overflow-wrap:break-word}
+  pre{font-size:12.5px;padding:12px 14px;margin-left:-4px;margin-right:-4px}
+  table:not(.tablewrap table):not(.plate table){display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  th,td{padding:.45em .55em}
+  .aside{padding-left:.8em}
+  figure{margin:1.3em 0 1.6em}
+  article>.wide{width:100%}
+  .plate{padding:10px;border-radius:8px}
+  figure:has(.plate .dg)>figcaption::after{content:"Swipe the diagram sideways to see all of it, or tap Full screen.";display:block;margin-top:.4em;font-style:italic;font-size:13px}
+  .dgbar{flex-wrap:wrap;gap:6px}
+  .dgkind small{display:block;margin:2px 0 0}
+  .controls,.chips,.events{gap:6px}
+  .btn{padding:9px 12px;min-height:40px}
+  .note{font-size:14.5px;padding:10px 12px}
+  .q{padding:14px}
+  .q button{padding:11px 12px}
+  .chapnav{flex-direction:column}
+  .chapnav a{max-width:none}
+  .chapnav .next{margin-left:0}
+  .checkcols{font-size:14px}
+  dl.notation{gap:.3em .8em}
+  .topbar{gap:8px;padding:0 10px}
+  .topbar .title span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .panel{right:12px;left:12px;width:auto;max-height:calc(100dvh - var(--bar) - 20px);overflow:auto}
+  #tip{max-width:min(300px,calc(100vw - 16px))}
+  figure.is-fs{padding:12px}
+}
+@media (max-width:700px) and (orientation:portrait){
+  figure.is-fs .plate{flex:none;overflow:auto;align-items:flex-start;justify-content:flex-start}
+  figure.is-fs .dg{min-width:600px;width:auto;height:auto;max-height:none}
+  figure.is-fs:has(.controls) .dg,figure.is-fs:has(.events) .dg{max-height:none}
+}
+@media (hover:none){
+  .btn:hover,.q button:hover:not(:disabled),.fsbtn:hover{border-color:var(--rule)}
+}
 </style>
 </head>
 <body>
@@ -528,6 +582,12 @@ document.addEventListener("pointermove", e => { const g = e.target.closest && e.
 document.addEventListener("focusin", e => { const g = e.target.closest && e.target.closest(".dg .tip"); if (g) { const r = g.getBoundingClientRect(); showTip(g, r.left + r.width/2, r.bottom); } });
 document.addEventListener("focusout", hideTip);
 window.addEventListener("scroll", hideTip, { passive: true });
+/* touch: tap a diagram part to show its tooltip, tap elsewhere to hide */
+document.addEventListener("pointerup", e => {
+  if (e.pointerType === "mouse") return;
+  const g = e.target.closest && e.target.closest(".dg .tip");
+  if (g) showTip(g, e.clientX, e.clientY); else hideTip();
+});
 
 
 /* ---------- contents toggle (desktop and mobile) ---------- */
