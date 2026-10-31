@@ -328,6 +328,45 @@ figure.is-fs:has(.controls) .dg,figure.is-fs:has(.events) .dg{max-height:calc(10
 @media (hover:none){
   .btn:hover,.q button:hover:not(:disabled),.fsbtn:hover{border-color:var(--rule)}
 }
+
+/* ---------- highlights, reading position ---------- */
+.hl-yellow{--hl:rgba(255,210,0,.45);--hlc:#f2c200}
+.hl-green{--hl:rgba(60,190,110,.33);--hlc:#33b06a}
+.hl-blue{--hl:rgba(70,150,255,.30);--hlc:#3d8bfd}
+.hl-pink{--hl:rgba(255,90,170,.30);--hlc:#f0569f}
+mark.hl{background:var(--hl);color:inherit;border-radius:3px;padding:.05em 0;-webkit-box-decoration-break:clone;box-decoration-break:clone;cursor:pointer}
+mark.hl.flash{animation:hlflash 1.8s ease}
+@keyframes hlflash{0%,60%{box-shadow:0 0 0 3px var(--hlc)}100%{box-shadow:0 0 0 0 transparent}}
+.hltool{position:absolute;z-index:70;display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--surface);border:1px solid var(--rule);border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-family:var(--sans)}
+.hltool[hidden]{display:none}
+.hlc{width:28px;height:28px;border-radius:50%;border:2px solid var(--surface);background:var(--hlc);cursor:pointer;box-shadow:0 0 0 1px var(--rule);padding:0}
+.hlc.on{box-shadow:0 0 0 2px var(--text)}
+.hlx{height:28px;border:1px solid var(--rule);background:var(--bg);color:var(--text);border-radius:999px;padding:0 10px;font:600 13px var(--sans);cursor:pointer}
+@media (pointer:coarse){.hlc{width:34px;height:34px}.hlx{height:34px}}
+.hlcount{font:600 11px/16px var(--sans);background:var(--accent);color:var(--bg);border-radius:999px;padding:0 5px;min-width:16px;text-align:center}
+.hlcount:empty{display:none}
+#hlBtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.hlpanel{max-height:calc(100dvh - var(--bar) - 24px);overflow:auto;width:min(380px,calc(100vw - 24px))}
+.hlfilter{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
+.hlf{display:inline-flex;align-items:center;gap:6px;font:600 13px var(--sans);color:var(--text);background:var(--bg);border:1px solid var(--rule);border-radius:999px;padding:4px 10px;cursor:pointer}
+.hlf i{width:10px;height:10px;border-radius:50%;background:var(--hlc)}
+.hlf[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.hlch{font-weight:700;font-size:12.5px;margin:16px 0 2px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.hlitem{display:grid;grid-template-columns:4px 1fr auto;gap:10px;padding:10px 0;border-top:1px solid var(--rule)}
+.hlitem .bar{border-radius:2px;background:var(--hlc)}
+.hlitem .go{all:unset;cursor:pointer;font-family:var(--body);font-size:14.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.hlitem .go:focus-visible{outline:2px solid var(--accent)}
+.hlitem small{display:block;color:var(--muted);font-size:12.5px;margin-top:3px}
+.hlitem.lost .go{color:var(--muted);cursor:default}
+.hlitem .del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:6px;align-self:start}
+.hlitem .del:hover{color:var(--bad)}
+.hlempty{color:var(--muted);font-size:14.5px;margin:10px 0}
+.hlactions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.hlhelp{color:var(--muted);font-size:13px;line-height:1.45;margin:10px 0 0}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:80;display:flex;gap:12px;align-items:center;background:var(--text);color:var(--bg);font:14px/1.4 var(--sans);padding:10px 14px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);width:max-content;max-width:calc(100vw - 24px)}
+.toast[hidden]{display:none}
+.toast button{background:none;border:1px solid currentColor;color:inherit;border-radius:7px;padding:5px 10px;font:600 13px var(--sans);cursor:pointer;white-space:nowrap}
+@media print{.hltool,.toast{display:none!important}}
 </style>
 </head>
 <body>
@@ -685,7 +724,8 @@ function render(id){
   const ch = list.find(c => c.id === id) || list[0];
   if (!ch) { $("main").innerHTML = `<article><h1>Your course library</h1><p class="lede">No chapters yet. Add a chapter block before the “ADD NEW CHAPTERS” marker.</p></article>`; buildNav({}); return; }
   if (fsFig) leaveFs();
-  hideTip();
+  hideTip(); hideTool();
+  if (curId) { clearTimeout(posTimer); savePos(); }
   const book = BOOKS.find(b => b.id === ch.book) || { title:"", short:"" };
   const i = list.indexOf(ch), prev = list[i-1], next = list[i+1];
   const link = (c, cls, lab) => c ? `<a class="${cls}" href="#c-${c.id}"><small>${lab}</small>${esc((BOOKS.find(b => b.id === c.book)||{}).short || "")} ${c.num}: ${esc(c.title)}</a>` : "";
@@ -701,10 +741,315 @@ function render(id){
   let kinds = {};
   try { kinds = ch.run(K) || {}; } catch (err) { console.error("Chapter " + ch.id + " failed:", err); }
   decorate(kinds);
+  curId = ch.id;
+  try { applyHL(ch.id); } catch (err) { console.error("highlights failed:", err); }
   try { localStorage.setItem(LAST, ch.id); } catch (e) {}
-  window.scrollTo(0, 0); onScroll();
+  settle(ch.id);
 }
 window.addEventListener("hashchange", () => { if (location.hash.startsWith("#c-")) render(location.hash.slice(3)); });
+
+
+/* ---------- storage helpers ---------- */
+const loadJSON = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v && typeof v === "object" ? v : d; } catch (e) { return d; } };
+const saveJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const barH = () => document.querySelector(".topbar").getBoundingClientRect().height;
+const article = () => document.querySelector("#main article");
+
+/* ---------- toast ---------- */
+const toastEl = document.createElement("div"); toastEl.className = "toast"; toastEl.hidden = true; toastEl.setAttribute("role", "status");
+document.body.appendChild(toastEl);
+let toastTimer = null;
+function hideToast(){ toastEl.hidden = true; }
+function toast(msg, btnLabel, onBtn){
+  toastEl.innerHTML = `<span>${esc(msg)}</span>` + (btnLabel ? `<button type="button">${esc(btnLabel)}</button>` : "");
+  if (btnLabel) toastEl.querySelector("button").addEventListener("click", () => { hideToast(); onBtn(); });
+  toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, 7000);
+}
+
+/* ---------- reading position: saved per chapter ---------- */
+const POS = "course-library-positions";
+const BLOCKS = "h1,h2,h3,p,li,pre,figure,table,dl,.aside,.q,.chapnav";
+let curId = null, restoring = false, posTimer = null, pendingJump = null;
+const snipOf = b => b.textContent.replace(/\s+/g, " ").trim().slice(0, 60);
+function savePos(){
+  const art = article(); if (!curId || restoring || !art) return;
+  const top = barH() + 8, blocks = [...art.querySelectorAll(BLOCKS)];
+  const b = blocks.find(x => { const r = x.getBoundingClientRect(); return r.height && r.bottom > top; });
+  const h = document.documentElement, sec = b && b.closest("section[id]");
+  const all = loadJSON(POS, {});
+  all[curId] = { i: b ? blocks.indexOf(b) : -1, dy: b ? Math.round(top - b.getBoundingClientRect().top) : 0, snip: b ? snipOf(b) : "",
+    sec: sec ? sec.id : "", frac: h.scrollTop / Math.max(1, h.scrollHeight - h.clientHeight), y: Math.round(h.scrollTop), t: Date.now() };
+  saveJSON(POS, all);
+}
+function restorePos(id){
+  const p = loadJSON(POS, {})[id], art = article();
+  if (!p || !art || !(p.y > 80)) { window.scrollTo(0, 0); return false; }
+  const blocks = [...art.querySelectorAll(BLOCKS)], top = barH() + 8;
+  const b = (blocks[p.i] && snipOf(blocks[p.i]) === p.snip) ? blocks[p.i] : blocks.find(x => p.snip && snipOf(x) === p.snip);
+  const sec = p.sec && document.getElementById(p.sec);
+  const h = document.documentElement;
+  let y;
+  if (b) y = b.getBoundingClientRect().top + scrollY - top + (p.dy || 0);
+  else if (sec) y = sec.getBoundingClientRect().top + scrollY - top;
+  else y = (p.frac || 0) * (h.scrollHeight - h.clientHeight);
+  window.scrollTo(0, Math.max(0, y)); return true;
+}
+window.addEventListener("scroll", () => { clearTimeout(posTimer); posTimer = setTimeout(savePos, 400); }, { passive: true });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") savePos(); });
+window.addEventListener("pagehide", savePos);
+/* after a chapter renders: jump to a highlight, or go back to the saved spot */
+function settle(id){
+  restoring = true;
+  const jump = pendingJump; pendingJump = null;
+  const go = () => jump ? jumpTo(jump) : restorePos(id);
+  const moved = go(); onScroll();
+  const y0 = scrollY;
+  const done = () => { if (curId === id && Math.abs(scrollY - y0) < 4) { go(); onScroll(); } restoring = false; };
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => requestAnimationFrame(() => requestAnimationFrame(done)));
+  if (moved && !jump) toast("You are back where you stopped reading.", "Start from the top", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  else hideToast();
+}
+
+/* ---------- highlights ---------- */
+const HLK = "course-library-highlights";
+const COLORS = ["yellow", "green", "blue", "pink"];
+const NOHL = ".plate,.dgbar,.controls,.chips,.events,.note,.log,.q,#quiz,button,svg,.chapnav,.kicker,input,label,.checkcols,script,style";
+let HL = loadJSON(HLK, {}), savedRange = null, hlFilter = "all";
+const saveHL = () => saveJSON(HLK, HL);
+const okId = id => typeof id === "string" && /^[\w-]{1,40}$/.test(id);
+function textIndex(art){
+  const nodes = []; let full = "";
+  const w = document.createTreeWalker(art, NodeFilter.SHOW_TEXT, { acceptNode: n => n.parentElement && n.parentElement.closest(NOHL) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  let n; while ((n = w.nextNode())) { nodes.push({ n, s: full.length }); full += n.nodeValue; }
+  return { nodes, full };
+}
+function rangeOffsets(range, idx){
+  let s = -1, e = -1;
+  idx.nodes.forEach(({ n, s: gs }) => {
+    if (!range.intersectsNode(n)) return;
+    const ls = n === range.startContainer ? range.startOffset : 0;
+    const le = n === range.endContainer ? range.endOffset : n.nodeValue.length;
+    if (le <= ls) return;
+    if (s < 0 || gs + ls < s) s = gs + ls;
+    if (gs + le > e) e = gs + le;
+  });
+  if (s < 0) return null;
+  while (s < e && /\s/.test(idx.full[s])) s++;
+  while (e > s && /\s/.test(idx.full[e - 1])) e--;
+  const wc = c => !!c && /[\p{L}\p{N}_'’-]/u.test(c);   /* snap to whole words, like a PDF reader */
+  while (s > 0 && wc(idx.full[s - 1]) && wc(idx.full[s])) s--;
+  while (e < idx.full.length && wc(idx.full[e]) && wc(idx.full[e - 1])) e++;
+  return e > s ? [s, e] : null;
+}
+function locate(h, idx){
+  const f = idx.full; let best = -1, bestScore = -1, from = 0, at;
+  while ((at = f.indexOf(h.text, from)) !== -1) {
+    let sc = 0;
+    if (h.pre && f.slice(Math.max(0, at - h.pre.length), at) === h.pre) sc += 2;
+    if (h.suf && f.slice(at + h.text.length, at + h.text.length + h.suf.length) === h.suf) sc += 2;
+    if (sc > bestScore) { best = at; bestScore = sc; }
+    from = at + 1;
+  }
+  return best < 0 ? null : [best, best + h.text.length];
+}
+function wrap(art, s, e, h){
+  textIndex(art).nodes.forEach(({ n, s: gs }) => {
+    const ge = gs + n.nodeValue.length;
+    if (ge <= s || gs >= e) return;
+    const a = Math.max(s, gs) - gs, b = Math.min(e, ge) - gs;
+    if (!n.nodeValue.slice(a, b).trim()) return;   /* never wrap whitespace between table rows or list items */
+    let node = n;
+    if (b < node.nodeValue.length) node.splitText(b);
+    if (a > 0) node = node.splitText(a);
+    const m = document.createElement("mark"); m.className = "hl hl-" + h.color; m.dataset.hl = h.id;
+    node.parentNode.insertBefore(m, node); m.appendChild(node);
+  });
+}
+function unwrap(id, art){
+  (art || document).querySelectorAll(id ? `mark.hl[data-hl="${id}"]` : "mark.hl").forEach(m => {
+    const p = m.parentNode; while (m.firstChild) p.insertBefore(m.firstChild, m); p.removeChild(m); p.normalize();
+  });
+}
+function applyHL(id){
+  const art = article(); if (!art) return;
+  (HL[id] || []).forEach(h => { const loc = locate(h, textIndex(art)); h.lost = !loc; if (loc) wrap(art, loc[0], loc[1], h); });
+  updateCount();
+}
+function refreshHL(){ const art = article(); if (!art || !curId) return; unwrap(null, art); applyHL(curId); renderHLList(); }
+function secLabel(node){
+  const sec = node && node.parentElement && node.parentElement.closest("section[id]");
+  const h2 = sec && sec.querySelector("h2"); if (!h2) return "";
+  const num = h2.querySelector(".num"), n = num ? num.textContent.trim() : "";
+  const rest = h2.textContent.replace(n, "").replace(/\s+/g, " ").trim();
+  return n ? n + " " + rest : rest;
+}
+function findH(id){ for (const cid in HL) { const h = (HL[cid] || []).find(x => x.id === id); if (h) return [cid, h]; } return [null, null]; }
+function addHighlight(color){
+  const art = article(); if (!art || !savedRange || !curId) return;
+  const idx = textIndex(art), off = rangeOffsets(savedRange, idx); if (!off) return;
+  const [s, e] = off, first = idx.nodes.find(x => x.s + x.n.nodeValue.length > s);
+  const h = { id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), color, text: idx.full.slice(s, e),
+    pre: idx.full.slice(Math.max(0, s - 32), s), suf: idx.full.slice(e, e + 32), sec: secLabel(first && first.n), pos: s, t: Date.now() };
+  (HL[curId] || (HL[curId] = [])).push(h); saveHL();
+  wrap(art, s, e, h);
+  const sel = getSelection(); if (sel) sel.removeAllRanges();
+  savedRange = null; hideTool(); updateCount(); renderHLList();
+}
+function recolor(id, color){
+  const [, h] = findH(id); if (!h) return;
+  h.color = color; saveHL();
+  document.querySelectorAll(`mark.hl[data-hl="${id}"]`).forEach(m => m.className = "hl hl-" + color);
+  renderHLList();
+}
+function removeH(id){
+  const [cid] = findH(id); if (!cid) return;
+  HL[cid] = HL[cid].filter(x => x.id !== id); if (!HL[cid].length) delete HL[cid];
+  saveHL(); unwrap(id); updateCount(); renderHLList();
+}
+function jumpTo(id){
+  const m = document.querySelector(`mark.hl[data-hl="${id}"]`); if (!m) return false;
+  window.scrollTo(0, Math.max(0, m.getBoundingClientRect().top + scrollY - innerHeight * 0.3));
+  document.querySelectorAll(`mark.hl[data-hl="${id}"]`).forEach(x => { x.classList.remove("flash"); void x.offsetWidth; x.classList.add("flash"); });
+  return true;
+}
+
+/* the small color bar that appears under a selection or a highlight */
+const tool = document.createElement("div"); tool.className = "hltool"; tool.hidden = true; tool.setAttribute("role", "toolbar"); tool.setAttribute("aria-label", "Highlight");
+document.body.appendChild(tool);
+function hideTool(){ tool.hidden = true; tool.dataset.for = ""; }
+function showTool(rect, h){
+  tool.innerHTML = COLORS.map(c => `<button type="button" class="hlc hl-${c}${h && h.color === c ? " on" : ""}" data-c="${c}" aria-label="${h ? "Change to " : "Highlight in "}${c}" title="${c}"></button>`).join("") +
+    (h ? `<button type="button" class="hlx" data-x="1">Remove</button>` : "");
+  tool.dataset.for = h ? h.id : "";
+  tool.hidden = false;
+  const tw = tool.offsetWidth;
+  const x = Math.max(scrollX + 8, Math.min(rect.left + rect.width / 2 - tw / 2 + scrollX, scrollX + innerWidth - tw - 8));
+  tool.style.left = x + "px"; tool.style.top = (rect.bottom + scrollY + 10) + "px";
+}
+tool.addEventListener("mousedown", e => e.preventDefault());
+tool.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const forId = tool.dataset.for;
+  if (forId) { if (b.dataset.x) removeH(forId); else recolor(forId, b.dataset.c); hideTool(); return; }
+  if (b.dataset.c) addHighlight(b.dataset.c);
+});
+let mouseDown = false, selTimer = null;
+document.addEventListener("pointerdown", e => { if (e.pointerType === "mouse" && !tool.contains(e.target)) mouseDown = true; });
+document.addEventListener("pointerup", e => { if (e.pointerType === "mouse") { mouseDown = false; setTimeout(checkSel, 10); } });
+document.addEventListener("selectionchange", () => { clearTimeout(selTimer); selTimer = setTimeout(checkSel, 300); });
+function checkSel(){
+  if (mouseDown) return;
+  const sel = getSelection(), art = article();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) { if (!tool.dataset.for) hideTool(); return; }
+  const r = sel.getRangeAt(0);
+  if (!art || !art.contains(r.commonAncestorContainer) || !rangeOffsets(r, textIndex(art))) { if (!tool.dataset.for) hideTool(); return; }
+  savedRange = r.cloneRange();
+  const rects = r.getClientRects(), last = rects.length ? rects[rects.length - 1] : r.getBoundingClientRect();
+  showTool(last, null);
+}
+document.addEventListener("click", e => {
+  if (tool.contains(e.target)) return;
+  const m = e.target.closest && e.target.closest("mark.hl");
+  const sel = getSelection();
+  if (m && (!sel || sel.isCollapsed)) { const [, h] = findH(m.dataset.hl); if (h) { savedRange = null; showTool(m.getBoundingClientRect(), h); } return; }
+  if (!tool.hidden && (!sel || sel.isCollapsed)) hideTool();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") { hideTool(); openHL(false); } });
+
+/* "My highlights" panel */
+const hlBtn = document.createElement("button");
+hlBtn.className = "iconbtn"; hlBtn.id = "hlBtn"; hlBtn.type = "button";
+hlBtn.setAttribute("aria-controls", "hlPanel"); hlBtn.setAttribute("aria-expanded", "false"); hlBtn.setAttribute("aria-label", "My highlights"); hlBtn.title = "My highlights";
+hlBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg><span class="hlcount" id="hlCount"></span>`;
+setBtn.parentNode.insertBefore(hlBtn, setBtn);
+const hlPanel = document.createElement("div");
+hlPanel.className = "panel hlpanel"; hlPanel.id = "hlPanel"; hlPanel.hidden = true;
+hlPanel.setAttribute("role", "dialog"); hlPanel.setAttribute("aria-labelledby", "hlTitle");
+hlPanel.innerHTML = `<h2><span id="hlTitle">My highlights</span><button id="hlClose" aria-label="Close highlights">×</button></h2>
+  <div class="hlfilter" role="group" aria-label="Show color">
+    <button type="button" class="hlf" data-f="all" aria-pressed="true">All</button>` +
+    COLORS.map(c => `<button type="button" class="hlf hl-${c}" data-f="${c}" aria-pressed="false"><i></i>${c[0].toUpperCase() + c.slice(1)}</button>`).join("") + `
+  </div>
+  <div id="hlList"></div>
+  <div class="hlactions"><button type="button" class="reset" id="hlExport">Export backup</button><button type="button" class="reset" id="hlImportBtn">Import backup</button></div>
+  <input type="file" id="hlImport" accept="application/json,.json" hidden>
+  <p class="hlhelp">To highlight, select words in a chapter and pick a color. Tap a highlight to change its color or remove it. Highlights and your reading place are saved in this browser only. Use Export and Import to move them to another device.</p>`;
+document.body.appendChild(hlPanel);
+function openHL(open){
+  hlPanel.hidden = !open; hlBtn.setAttribute("aria-expanded", open);
+  if (open) { openPanel(false); hideTool(); renderHLList(); $("hlClose").focus(); }
+}
+hlBtn.addEventListener("click", () => openHL(hlPanel.hidden));
+$("hlClose").addEventListener("click", () => { openHL(false); hlBtn.focus(); });
+document.addEventListener("click", e => { if (!hlPanel.hidden && !hlPanel.contains(e.target) && !hlBtn.contains(e.target)) openHL(false); });
+setBtn.addEventListener("click", () => { if (!hlPanel.hidden) openHL(false); });
+hlPanel.querySelectorAll(".hlf").forEach(b => b.addEventListener("click", () => {
+  hlFilter = b.dataset.f; hlPanel.querySelectorAll(".hlf").forEach(x => x.setAttribute("aria-pressed", x === b)); renderHLList();
+}));
+function updateCount(){ const n = (HL[curId] || []).length; $("hlCount").textContent = n ? String(n) : ""; }
+function renderHLList(){
+  if (hlPanel.hidden) return;
+  const list = ordered(); let h = "", total = 0;
+  const chs = list.filter(c => (HL[c.id] || []).length);
+  chs.sort((a, b) => (b.id === curId) - (a.id === curId));
+  chs.forEach(c => {
+    const items = (HL[c.id] || []).filter(x => hlFilter === "all" || x.color === hlFilter).slice().sort((a, b) => (a.pos || 0) - (b.pos || 0));
+    if (!items.length) return;
+    const book = BOOKS.find(b => b.id === c.book) || {};
+    h += `<div class="hlch">${esc(book.short || "")} ${c.num}: ${esc(c.title)}${c.id === curId ? " (open now)" : ""}</div>`;
+    items.forEach(x => {
+      total++;
+      const lost = c.id === curId && x.lost;
+      h += `<div class="hlitem hl-${x.color}${lost ? " lost" : ""}"><span class="bar"></span><div><button type="button" class="go" data-ch="${c.id}" data-id="${x.id}">${esc(x.text)}</button>` +
+        `<small>${esc(x.sec || "")}${lost ? (x.sec ? " · " : "") + "Not found: this text has changed" : ""}</small></div>` +
+        `<button type="button" class="del" data-id="${x.id}" aria-label="Delete highlight" title="Delete">×</button></div>`;
+    });
+  });
+  $("hlList").innerHTML = total ? h : `<p class="hlempty">${hlFilter === "all" ? "No highlights yet. Select some words in a chapter, then pick a color." : "No highlights in this color."}</p>`;
+}
+$("hlList").addEventListener("click", e => {
+  const del = e.target.closest(".del"); if (del) { removeH(del.dataset.id); return; }
+  const go = e.target.closest(".go"); if (!go || go.closest(".lost")) return;
+  openHL(false);
+  if (go.dataset.ch === curId) jumpTo(go.dataset.id);
+  else { savePos(); pendingJump = go.dataset.id; location.hash = "#c-" + go.dataset.ch; }
+});
+
+/* backup: export and import highlights + reading positions */
+$("hlExport").addEventListener("click", () => {
+  const data = { app: "course-library", kind: "highlights-backup", version: 1, exported: new Date().toISOString(), highlights: HL, positions: loadJSON(POS, {}) };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
+  a.download = "course-library-highlights-" + new Date().toISOString().slice(0, 10) + ".json";
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+});
+$("hlImportBtn").addEventListener("click", () => $("hlImport").click());
+$("hlImport").addEventListener("change", e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+  f.text().then(t => {
+    const d = JSON.parse(t);
+    if (!d || d.app !== "course-library" || !d.highlights || typeof d.highlights !== "object") throw new Error("bad file");
+    let added = 0;
+    Object.keys(d.highlights).forEach(cid => {
+      if (!okId(cid) || !Array.isArray(d.highlights[cid])) return;
+      const cur = HL[cid] || [];
+      d.highlights[cid].forEach(x => {
+        if (!x || !okId(x.id) || typeof x.text !== "string" || !x.text || !COLORS.includes(x.color) || cur.some(y => y.id === x.id)) return;
+        cur.push({ id: x.id, color: x.color, text: x.text, pre: String(x.pre || ""), suf: String(x.suf || ""), sec: String(x.sec || ""), pos: Number(x.pos) || 0, t: Number(x.t) || Date.now() });
+        added++;
+      });
+      if (cur.length) HL[cid] = cur;
+    });
+    saveHL();
+    if (d.positions && typeof d.positions === "object") {
+      const all = loadJSON(POS, {});
+      Object.keys(d.positions).forEach(cid => { const p = d.positions[cid]; if (okId(cid) && p && typeof p === "object" && (!all[cid] || (p.t || 0) > (all[cid].t || 0))) all[cid] = p; });
+      saveJSON(POS, all);
+    }
+    refreshHL();
+    toast(added ? `Imported ${added} highlight${added === 1 ? "" : "s"}.` : "No new highlights in that file.");
+  }).catch(() => toast("This file is not a course library backup."));
+});
 
 window.CourseKit = {
   book(b){ BOOKS.push(b); },
@@ -3525,40 +3870,60 @@ return DG_KIND;
 <!-- ============ CHAPTER pddw-02 ============ -->
 <template id="tpl-pddw-02">
   <h1>Core database concepts</h1>
-  <p class="lede">A crash course on Chapter 2 of <em>Practical Database Design for the Web</em>: what a data model is, how the relational model structures data, how nulls and keys work, why we normalize, how integrity rules protect data, and what indexes and hashing do at the physical level.</p>
-  <p class="byline">Hover or tap any part of a diagram for an explanation, and use the Full screen button on any figure. Interactive pieces: a physical-data-independence toggle, a sets-to-table builder, a “is it still the same table?” experiment, clickable foreign keys, an anomaly explorer, a normalization stepper, null and integrity pickers, a B-tree search tracer and a disk-access comparison. Figures marked <span class="src book">From the book</span> are redrawn from the chapter; <span class="src ill">Course illustration</span> marks diagrams drawn for this course. The book’s headings are unnumbered; the numbers here are the course’s. Notes marked <em>Then vs now</em> are course additions: the book was written around 2002–2003.</p>
+  <p class="lede">A short course on Chapter 2 of <em>Practical Database Design for the Web</em>. It covers these topics:</p>
+  <ul>
+    <li>what a data model is;</li>
+    <li>how the relational model gives data a structure;</li>
+    <li>how nulls and keys work;</li>
+    <li>why we normalize;</li>
+    <li>how integrity rules protect data;</li>
+    <li>what indexes and hashing do at the physical level (on the disk).</li>
+  </ul>
+  <p class="byline">Hover over or tap any part of a diagram to see an explanation. Every figure has a Full screen button. The interactive parts are:</p>
+  <ul>
+    <li>a toggle for physical data independence;</li>
+    <li>a builder that turns sets into a table;</li>
+    <li>an experiment that asks “is it still the same table?”;</li>
+    <li>foreign keys that you can click;</li>
+    <li>a tool to explore anomalies;</li>
+    <li>a step-by-step normalization view;</li>
+    <li>pickers for nulls and for integrity rules;</li>
+    <li>a tool that traces a B-tree search;</li>
+    <li>a comparison of disk access methods.</li>
+  </ul>
+  <p class="byline">Figures marked <span class="src book">From the book</span> are redrawn from the chapter. <span class="src ill">Course illustration</span> marks diagrams drawn for this course. The book’s headings have no numbers. The numbers here belong to the course. Notes marked <em>Then vs now</em> are course additions, because the book was written around 2002–2003.</p>
 
   <!-- 2.1 -->
   <section class="chap" id="p2-1">
     <h2><span class="num">2.1</span>What is a data model?</h2>
-    <p>The chapter opens by defending theory. You can build a database without it, and it will mostly work, until you push it. Well-designed databases keep their performance as they grow and are easier to maintain and extend. A catalog search that is fine with 500 products can crawl at 5,000 if the design is poor. The good news: the ideas behind the relational model are simple, even if designing large systems isn’t.</p>
-    <p>“Data model” has two accepted meanings, and the book asks you to keep them apart:</p>
+    <p>The chapter starts by explaining why theory matters. You can build a database without theory. It will mostly work, until you put heavy demands on it. Well-designed databases stay fast as they grow. They are also easier to maintain and extend. With a poor design, a catalog search that works well with 500 products can become very slow with 5,000. The good news is this: the ideas behind the relational model are simple. Designing large systems is still hard.</p>
+    <p>The term “data model” has two accepted meanings. The book asks you to keep them separate:</p>
     <dl class="notation">
-      <dt>Meaning 1: a framework</dt><dd>A formal way of structuring and manipulating data. It is what a DBMS is built on. The relational model is one. Used mostly by theorists and DBMS vendors.</dd>
-      <dt>Meaning 2: a description</dt><dd>A structured description of one real-world problem, such as an ER diagram of a library database. Often called a <strong>schema</strong>. Used by designers and analysts.</dd>
+      <dt>Meaning 1: a framework</dt><dd>A formal way to structure and work with data. A DBMS (database management system) is built on it. The relational model is one example. Mostly theorists and DBMS vendors use this meaning.</dd>
+      <dt>Meaning 2: a description</dt><dd>A structured description of one real-world problem, such as an ER diagram of a library database. People often call it a <strong>schema</strong>. Designers and analysts use this meaning.</dd>
     </dl>
-    <p>The book’s analogy: building regulations versus the floor plans for one particular building. This chapter and the next use meaning 1. In that sense, every data model has three aspects:</p>
+    <p>The book compares them like this. Meaning 1 is like building regulations. Meaning 2 is like the floor plans for one particular building. This chapter and the next use meaning 1. In this sense, every data model has three aspects:</p>
     <dl class="notation">
       <dt>Structure</dt><dd>How data is represented.</dd>
-      <dt>Integrity</dt><dd>How invalid data is kept out, and valid data kept valid.</dd>
-      <dt>Operations</dt><dd>How you add, delete, change and retrieve data. Query languages such as SQL live here (Chapter 3).</dd>
+      <dt>Integrity</dt><dd>How invalid data is kept out, and how valid data stays valid.</dd>
+      <dt>Operations</dt><dd>How you add, delete, change and retrieve data. Query languages such as SQL belong here (Chapter 3).</dd>
     </dl>
-    <p>The big win of modern models is <strong>physical data independence</strong>. In the 1960s there was no DBMS: you wrote your own data-management code and had to know where every file lived and how it was laid out. The fix was a <em>logical</em> data model layered over the physical storage. Programs talk to the logical model; the DBMS maps it to files. In principle, storage can be completely reorganized without rewriting a single program, and a general query language becomes possible because nobody needs to know where data physically sits.</p>
+    <p>The biggest benefit of modern models is <strong>physical data independence</strong>. This means programs do not depend on how data is stored on disk. In the 1960s there was no DBMS. You wrote your own code to manage data. You had to know where every file was and how it was laid out. The solution was a <em>logical</em> data model placed on top of the physical storage. Programs talk to the logical model. The DBMS maps it to files. In theory, you can completely reorganize storage without rewriting a single program. It also makes a general query language possible, because nobody needs to know where the data physically sits.</p>
   </section>
   <figure class="wide">
     <div class="plate" data-dg="dmodel"></div>
     <div class="chips" id="dmBtns" aria-label="Choose a setup"></div>
     <div class="note" id="dmNote" aria-live="polite"></div>
-    <figcaption><span class="src ill">Course illustration</span><b>Figure A.</b> The three aspects of a data model, and physical data independence. Switch between the 1960s approach, a logical model, and what happens when storage is reorganized. File names are invented for the illustration.</figcaption>
+    <figcaption><span class="src ill">Course illustration</span><b>Figure A.</b> The three aspects of a data model, and physical data independence. Switch between three views: the 1960s approach, a logical model, and what happens when storage is reorganized. The file names are invented for the illustration.</figcaption>
   </figure>
-  <p>Three logical models appeared in the late 1960s and early 1970s: hierarchical, network and relational. The first two (Chapter 1) proved inflexible and were overtaken by the relational model in the early 1980s, which is why the rest of the chapter focuses on it.</p>
-  <div class="aside"><b>Front-end tie-in.</b> The book points out the Web was meant to have its own physical independence: URLs are physical paths, and logical URIs that never change were supposed to hide them. You meet the same idea every time an API returns stable resource ids while the server moves files around behind it.</div>
+  <p>Three logical models appeared in the late 1960s and early 1970s: hierarchical, network and relational. The first two (Chapter 1) turned out to be inflexible. The relational model replaced them in the early 1980s. That is why the rest of the chapter focuses on it.</p>
+  <div class="aside"><b>Front-end tie-in.</b> The book notes that the Web was meant to have its own physical independence. URLs are physical paths. Logical URIs that never change were supposed to hide them. You see the same idea when an API returns stable resource ids. Behind the API, the server can move files around.</div>
 
   <!-- 2.2 -->
   <section class="chap" id="p2-2">
     <h2><span class="num">2.2</span>The relational model: tables, rows and columns</h2>
-    <p>Edgar Codd, a mathematician at IBM, disliked the ad hoc nature of the early models and built one on <strong>set theory and predicate logic</strong>. He published it in the July 1970 <em>Communications of the ACM</em>. IBM’s System R prototype followed in the mid-1970s, then SQL/DS in 1981, which evolved into DB2. But a small company, Relational Software, Inc., shipped first, in 1979; its product was Oracle. The 1980s brought DB2, Sybase, Informix and many more.</p>
-    <p>The core idea is a <strong>relation</strong>. Take a set of employee names, a set of positions, a set of locations and a set of salaries. Each employee takes one value from each set. Line those choices up and you get a table: each column draws from one set, each row is one employee. Build it below.</p>
+    <p>Edgar Codd was a mathematician at IBM. He did not like the early models, because they were put together without a clear plan. So he built a model on <strong>set theory and predicate logic</strong> (two branches of mathematics). He published it in the July 1970 issue of <em>Communications of the ACM</em>. Next came IBM’s System R prototype in the mid-1970s. Then came SQL/DS in 1981, which later became DB2. But a small company, Relational Software, Inc., shipped a product first, in 1979. Its product was Oracle. The 1980s brought DB2, Sybase, Informix and many more.</p>
+    <p>The core idea is a <strong>relation</strong>. Take four sets: employee names, positions, locations and salaries. Each employee takes one value from each set. Put those choices in a line, one line per employee, and you get a table. Each column takes its values from one set. Each row is one employee. Build it below.</p>
   </section>
   <figure class="wide">
     <div class="plate" data-dg="sets"></div>
@@ -3566,39 +3931,54 @@ return DG_KIND;
     <div class="note" id="setNote" aria-live="polite"></div>
     <figcaption><span class="src book">From the book</span><b>Book figures, p. 28, redrawn.</b> Four sets of values, and the EMPLOYEE relation built by taking one value from each.</figcaption>
   </figure>
-  <p>It looks like a spreadsheet, but the book stresses the resemblance is only skin deep. Two warnings: a <em>relation</em> (a table) is not a <em>relationship</em> (a link between tables), and from here on the book just says “table”. The rules that make a table different:</p>
+  <p>It looks like a spreadsheet. But the book stresses that the similarity is only on the surface. Note two things. First, a <em>relation</em> (a table) is not a <em>relationship</em> (a link between tables). Second, from here on the book just says “table”. These rules make a table different:</p>
   <ul>
-    <li>It has a <strong>name</strong> (EMPLOYEE) and named <strong>columns</strong>, each drawing its values from a set called the column’s <strong>domain</strong>.</li>
+    <li>It has a <strong>name</strong> (EMPLOYEE) and named <strong>columns</strong>. Each column takes its values from a set. This set is called the column’s <strong>domain</strong>.</li>
     <li>Each cell holds <strong>one value</strong>. No employee has two positions in one cell. This rule is first normal form (section 2.5).</li>
-    <li>Any number of rows (four, four billion, none) and as many columns as you need, though columns are properties of one kind of thing, so huge numbers are unusual.</li>
-    <li><strong>No two rows are identical</strong>, because each row is a different real-world instance.</li>
-    <li><strong>Row order and column order don’t matter.</strong> Shuffle rows, or swap whole columns, and it’s still the same table. Moving individual values is a different matter. Try it:</li>
+    <li>It can have any number of rows: four, four billion, or none. It can have as many columns as you need. But columns are properties of one kind of thing, so a very large number of columns is unusual.</li>
+    <li><strong>No two rows are identical</strong>, because each row is a different real-world thing.</li>
+    <li><strong>Row order and column order don’t matter.</strong> Shuffle the rows, or swap whole columns, and it is still the same table. Moving single values is different. Try it:</li>
   </ul>
   <figure class="wide">
     <div class="plate" data-dg="props"></div>
     <div class="chips" id="propBtns" aria-label="Try a change"></div>
     <div class="note" id="propNote" aria-live="polite"></div>
-    <figcaption><span class="src ill">Course illustration</span><b>Figure B.</b> The book’s rules about ordering and duplicates, as an experiment on its EMPLOYEE table. The “Paris” salary is the book’s own example of nonsense data.</figcaption>
+    <figcaption><span class="src ill">Course illustration</span><b>Figure B.</b> The book’s rules about order and duplicates, shown as an experiment on its EMPLOYEE table. The “Paris” salary is the book’s own example of nonsense data.</figcaption>
   </figure>
-  <p>Formally, tables are <strong>relations</strong>, rows are <strong>tuples</strong> and columns are <strong>attributes</strong>. The book uses the everyday names, but rejects file, record and field as synonyms: those are <em>physical</em> structures, and a logical table may be split across several physical files.</p>
-  <p>A table usually stands for something real (employees, products, customers) or abstract (orders, invoices, contracts). Columns are the properties you store; each row is one occurrence. The chapter’s running example has three more tables, PRODUCT, CUSTOMER and SALE (shown in section 2.4). Drawing whole tables is clumsy, so the book uses a compact notation:</p>
+  <p>In formal terms, tables are <strong>relations</strong>, rows are <strong>tuples</strong> and columns are <strong>attributes</strong>. The book uses the everyday names. But it does not accept file, record and field as other names for them. Those are <em>physical</em> structures. One logical table may be split across several physical files.</p>
+  <p>A table usually stands for something real (employees, products, customers) or something abstract (orders, invoices, contracts). Columns are the properties you store. Each row is one occurrence. The chapter’s running example has three more tables: PRODUCT, CUSTOMER and SALE (shown in section 2.4). Drawing whole tables takes a lot of space, so the book uses a short notation:</p>
 <pre><code>EMPLOYEE(Name, Position, Location, Salary)
 PRODUCT(ProductNo, Description, ReorderLevel, Price, QtyInStock)
 CUSTOMER(CustomerNo, First, Last, Address, CreditLimit)
 SALE(SaleNo, SaleDate, CustomerNo, ProductNo, Qty, Amount, Salesrep)</code></pre>
-  <div class="aside pitfalls"><b>Common mistakes.</b> Relying on row order (“the newest order is the last row”): a table has no order unless you ask for one with <code>ORDER BY</code>. And treating a table like a spreadsheet, with duplicate rows or several values crammed into one cell.</div>
+  <div class="aside pitfalls"><b>Common mistakes.</b>
+    <ul>
+      <li>Depending on row order, for example “the newest order is the last row”. A table has no order unless you ask for one with <code>ORDER BY</code>.</li>
+      <li>Treating a table like a spreadsheet, with duplicate rows or several values packed into one cell.</li>
+    </ul></div>
 
   <!-- 2.3 -->
   <section class="chap" id="p2-3">
     <h2><span class="num">2.3</span>Domains, data types and nulls</h2>
     <h3>Data types and domains</h3>
-    <p>Everything is bits on disk, but a DBMS offers <strong>data types</strong> that say how to store and return values while hiding the physical form. Expect integers and decimals, a date type (often with time, sometimes separate), and fixed or variable-length strings. Many products add time intervals, <strong>BLOBs</strong> (binary large objects, such as images or documents), <strong>CLOBs</strong> (character large objects, for megabytes of text or XML) and Booleans.</p>
-    <p>Strictly, data types aren’t part of the relational model. It speaks of <strong>domains</strong>: the set of allowed values for a column. A domain can be “any integer greater than 4000”, or even a mixed bag of values, though single-type domains are the norm. Few products supported domains directly (the book names Oracle); you get most of the effect with constraints, covered in Chapter 3.</p>
-    <div class="aside"><b>Then vs now.</b> PostgreSQL has <code>CREATE DOMAIN</code>, for example <code>CREATE DOMAIN salary AS integer CHECK (VALUE &gt; 20000)</code>, which is exactly the book’s restricted single-type domain. In most products a <code>CHECK</code> constraint on the column is the everyday equivalent.</div>
+    <p>On disk, everything is bits. But a DBMS offers <strong>data types</strong>. A data type says how to store and return values, and it hides the physical form. You can expect these types:</p>
+    <ul>
+      <li>integers and decimals;</li>
+      <li>a date type (often with time, sometimes with time as a separate type);</li>
+      <li>strings of fixed or variable length.</li>
+    </ul>
+    <p>Many products also add time intervals, <strong>BLOBs</strong> (binary large objects, such as images or documents), <strong>CLOBs</strong> (character large objects, for megabytes of text or XML) and Booleans.</p>
+    <p>Strictly speaking, data types are not part of the relational model. The model talks about <strong>domains</strong> instead. A domain is the set of allowed values for a column. A domain can be “any integer greater than 4000”. It can even be a mixed group of values of different kinds, but domains of a single type are normal. Few products supported domains directly (the book names Oracle). You get most of the same effect with constraints (rules on a column), covered in Chapter 3.</p>
+    <div class="aside"><b>Then vs now.</b> PostgreSQL has <code>CREATE DOMAIN</code>, for example <code>CREATE DOMAIN salary AS integer CHECK (VALUE &gt; 20000)</code>. This is exactly the book’s restricted domain of a single type. In most products, a <code>CHECK</code> constraint on the column is the everyday way to do the same thing.</div>
     <h3>Missing data: null</h3>
-    <p>Sometimes there is no value to store, for two different reasons. The value may be <strong>unknown</strong> (the customer didn’t give an email address) or <strong>inapplicable</strong> (the customer has no email address at all). An empty string means “a blank string”, not “no value”, and numbers and dates have no blank. Old tricks such as <code>-1</code> for a missing price break as soon as you compute a sum, an average or a date difference.</p>
-    <p>Codd’s answer is <strong>null</strong>: a marker that stands in place of a value, usable with any type. It is not itself a value, so “null value” is a slight misnomer. In the SALE table, sale 12348 has a null CustomerNo, perhaps a cash sale. In CUSTOMER, a null CreditLimit means “not allowed credit”, which a zero would get wrong: zero suggests the customer has credit, just none left.</p>
-    <p>Because null isn’t a value, comparisons and arithmetic with it are meaningless: the book likens “is null &gt; 2000?” to asking “is fish &gt; 2000?”. The usual answer is “unknown”. Pick an expression below to see what SQL does.</p>
+    <p>Sometimes there is no value to store. There are two different reasons for this:</p>
+    <ul>
+      <li>The value may be <strong>unknown</strong>. For example, the customer did not give an email address.</li>
+      <li>The value may be <strong>inapplicable</strong> (it does not apply). For example, the customer has no email address at all.</li>
+    </ul>
+    <p>An empty string means “a blank string”, not “no value”. Numbers and dates have no blank. Old tricks, such as <code>-1</code> for a missing price, fail as soon as you calculate a sum, an average or a date difference.</p>
+    <p>Codd’s answer is <strong>null</strong>. Null is a marker that stands in place of a value. You can use it with any type. Null is not itself a value, so the term “null value” is slightly wrong. In the SALE table, sale 12348 has a null CustomerNo. Perhaps it was a cash sale. In CUSTOMER, a null CreditLimit means “not allowed credit”. A zero would give the wrong meaning. Zero suggests that the customer has credit, but none is left.</p>
+    <p>Null is not a value, so comparisons and arithmetic with it have no meaning. The book compares “is null &gt; 2000?” to asking “is fish &gt; 2000?”. The usual answer is “unknown”. Pick an expression below to see what SQL does.</p>
   </section>
   <div class="chips" id="nullBtns" aria-label="Pick an expression"></div>
   <div class="note" id="nullNote" aria-live="polite"></div>
@@ -3607,15 +3987,28 @@ SALE(SaleNo, SaleDate, CustomerNo, ProductNo, Qty, Amount, Salesrep)</code></pre
 SELECT * FROM customer WHERE credit_limit = NULL;     -- no rows, ever: the test is unknown
 SELECT * FROM customer WHERE credit_limit IS NULL;    -- Amelia, Antonio and Wayne
 SELECT COALESCE(credit_limit, 0) FROM customer;       -- show 0 instead of null, explicitly</code></pre>
-  <p>Practical advice from the chapter: check how your RDBMS handles nulls, and say per column whether nulls are allowed. If a product doesn’t support nulls, simulate them with a flag column, for example <code>AllowedCredit</code> = Y/N beside <code>CreditLimit</code>. The other option is a <strong>default value</strong>, such as a dummy “Cash Sale” customer used as the default CustomerNo. The rule of thumb: use a sensible default if one exists; use null when no default makes sense.</p>
-  <div class="aside pitfalls"><b>Common mistakes.</b> Writing <code>= NULL</code> instead of <code>IS NULL</code>; expecting <code>AVG</code> to count missing rows; using 0, <code>-1</code> or <code>''</code> as “missing” in a column that can legitimately hold those values. In TypeScript, the same split shows up as <code>null</code> versus <code>undefined</code> versus <code>""</code>: decide which one means “no value” and map it to SQL null consistently.</div>
+  <p>The chapter gives practical advice:</p>
+  <ul>
+    <li>Check how your RDBMS (relational DBMS) handles nulls.</li>
+    <li>For each column, say whether nulls are allowed.</li>
+    <li>If a product does not support nulls, imitate them with a flag column. For example, put <code>AllowedCredit</code> = Y/N next to <code>CreditLimit</code>.</li>
+    <li>The other option is a <strong>default value</strong>. For example, a dummy “Cash Sale” customer can be the default CustomerNo.</li>
+  </ul>
+  <p>The general guideline: use a sensible default if one exists. Use null when no default makes sense.</p>
+  <div class="aside pitfalls"><b>Common mistakes.</b>
+    <ul>
+      <li>Writing <code>= NULL</code> instead of <code>IS NULL</code>.</li>
+      <li>Expecting <code>AVG</code> to count missing rows.</li>
+      <li>Using 0, <code>-1</code> or <code>''</code> to mean “missing” in a column that can really hold those values.</li>
+    </ul>
+    In TypeScript, the same split appears as <code>null</code> versus <code>undefined</code> versus <code>""</code>. Decide which one means “no value”. Then always map it to SQL null in the same way.</div>
 
   <!-- 2.4 -->
   <section class="chap" id="p2-4">
     <h2><span class="num">2.4</span>Primary keys and foreign keys</h2>
     <h3>Identifying rows: primary keys</h3>
-    <p>If two rows were identical you couldn’t tell the real-world things apart, so the relational model requires every table to have a column, or combination of columns, that uniquely identifies each row: the <strong>primary key</strong>. A single column is preferable, but <strong>composite keys</strong> (such as order number plus product number) occur naturally. The model insists on a primary key even though many RDBMSs don’t.</p>
-    <p>In PRODUCT, <code>ProductNo</code> is clearly a unique code. <code>Description</code> isn’t safe: names and descriptions aren’t guaranteed to stay unique, or unchanged, and <strong>primary key values shouldn’t change</strong>. EMPLOYEE is harder:</p>
+    <p>If two rows were identical, you could not tell the real-world things apart. So the relational model requires a <strong>primary key</strong> in every table. This is a column, or a combination of columns, that identifies each row uniquely. A single column is better. But <strong>composite keys</strong> (keys made of several columns, such as order number plus product number) appear naturally. The model insists on a primary key, even though many RDBMSs do not.</p>
+    <p>In PRODUCT, <code>ProductNo</code> is clearly a unique code. <code>Description</code> is not safe. Names and descriptions are not guaranteed to stay unique or unchanged. And <strong>primary key values shouldn’t change</strong>. EMPLOYEE is harder:</p>
     <div class="tablewrap"><table>
       <thead><tr><th>Name</th><th>Position</th><th>Location</th><th>Salary</th></tr></thead>
       <tbody>
@@ -3625,76 +4018,108 @@ SELECT COALESCE(credit_limit, 0) FROM customer;       -- show 0 instead of null,
         <tr><td>Alex de Tocqueville</td><td>Programmer</td><td>Paris</td><td>21000</td></tr>
       </tbody>
     </table></div>
-    <p class="hint">The book’s EMPLOYEE table as shown on p. 35. (On p. 28 Richard Jones earns 34000; on p. 35 the two top rows share 35000, which is why Salary can’t be the key.)</p>
-    <p>Position, Location and Salary all repeat. Name looks unique, but plenty of people share a name. Concatenating every column works on paper but makes searching slow, and two London programmers called Anna Horton on 22000 are not impossible. The better answer is an invented <strong>surrogate key</strong>, such as an employee number, often generated by the RDBMS (Chapter 4).</p>
-    <p>A table has exactly one primary key but may have several unique identifiers. Store both an employee number and a social security number, and one becomes the primary key while the other is an <strong>alternate key</strong>. The book underlines primary keys from here on; in diagrams here they are bold and underlined.</p>
+    <p class="hint">The book’s EMPLOYEE table as shown on p. 35. (On p. 28, Richard Jones earns 34000. On p. 35, the top two rows both have 35000. That is why Salary can’t be the key.)</p>
+    <p>Position, Location and Salary all repeat. Name looks unique, but many people share a name. You could join all the columns together into one key. This works on paper, but it makes searching slow. Also, two London programmers called Anna Horton, both earning 22000, are not impossible. A better answer is an invented <strong>surrogate key</strong>, such as an employee number. The RDBMS often generates it (Chapter 4).</p>
+    <p>A table has exactly one primary key. But it may have several unique identifiers. Suppose you store both an employee number and a social security number. One becomes the primary key. The other is an <strong>alternate key</strong>. From here on, the book underlines primary keys. In the diagrams here, they are bold and underlined.</p>
     <h3>Linking tables: foreign keys</h3>
-    <p>Customers place orders and books have authors, so tables need links too. Look at SALE: it contains <code>CustomerNo</code>, the primary key of CUSTOMER. Take a sale’s CustomerNo and you can look up the right customer. That embedded column is a <strong>foreign key</strong>: “foreign” because it is another table’s primary (or alternate) key. SALE is the <strong>child table</strong>; CUSTOMER is a <strong>parent table</strong>. SALE has a second foreign key, <code>ProductNo</code>, pointing at PRODUCT. Click a sale to follow both.</p>
+    <p>Customers place orders and books have authors, so tables also need links. Look at SALE. It contains <code>CustomerNo</code>, which is the primary key of CUSTOMER. Take a sale’s CustomerNo, and you can look up the right customer. This embedded column is a <strong>foreign key</strong>. It is called “foreign” because it is the primary (or alternate) key of another table. SALE is the <strong>child table</strong>. CUSTOMER is a <strong>parent table</strong>. SALE has a second foreign key, <code>ProductNo</code>, which points to PRODUCT. Click a sale to follow both.</p>
   </section>
   <figure class="wide">
     <div class="plate" data-dg="salesfk"></div>
     <div class="chips" id="fkBtns" aria-label="Highlight a property"></div>
     <div class="note" id="fkNote" aria-live="polite"></div>
-    <figcaption><span class="src book">From the book</span><b>Book figure, p. 37, redrawn</b> (the tables themselves are on pp. 30–31). The book draws a line from every foreign-key value to its parent row; here one arrow per foreign key shows the link, and clicking a sale lights up the rows it points to.</figcaption>
+    <figcaption><span class="src book">From the book</span><b>Book figure, p. 37, redrawn</b> (the tables themselves are on pp. 30–31). The book draws a line from every foreign-key value to its parent row. Here, one arrow per foreign key shows the link. Click a sale to highlight the rows it points to.</figcaption>
   </figure>
-  <p>Three things to notice, all visible in the figure:</p>
+  <p>Notice three things. You can see all of them in the figure:</p>
   <ul>
-    <li>A foreign key should only hold values that exist as keys in the parent, or null. Sale 12348’s null CustomerNo is fine: there is no customer to find.</li>
-    <li>Parent rows don’t need children: the left-handed doodad and the grunge nut have never been sold.</li>
-    <li>Foreign key values needn’t be unique in the child: customer 1166-3461 appears twice, product DHU69863 three times.</li>
+    <li>A foreign key should only hold values that exist as keys in the parent, or null. Sale 12348 has a null CustomerNo. This is fine: there is no customer to find.</li>
+    <li>Parent rows don’t need children. The left-handed doodad and the grunge nut have never been sold.</li>
+    <li>Foreign key values don’t need to be unique in the child. Customer 1166-3461 appears twice. Product DHU69863 appears three times.</li>
   </ul>
-  <p>Foreign keys exist mainly so you can <strong>join</strong> related rows, such as sale 12347 with Amelia Waverley’s customer row (Chapter 3). Like primary keys they can be composite, and unlike primary keys a table can have several. You’ll sometimes hear them called <em>references</em>.</p>
-  <div class="aside pitfalls"><b>Common mistakes.</b> Using a name or email as the primary key (both change); copying customer details into the sale instead of the customer’s key; and assuming the database checks foreign keys when you never declared them.</div>
+  <p>Foreign keys exist mainly so you can <strong>join</strong> related rows (combine them in one result). For example, you can join sale 12347 with Amelia Waverley’s customer row (Chapter 3). Like primary keys, foreign keys can be composite. Unlike primary keys, a table can have several of them. People sometimes call them <em>references</em>.</p>
+  <div class="aside pitfalls"><b>Common mistakes.</b>
+    <ul>
+      <li>Using a name or email as the primary key. Both can change.</li>
+      <li>Copying customer details into the sale, instead of the customer’s key.</li>
+      <li>Assuming the database checks foreign keys when you never declared them.</li>
+    </ul></div>
 
   <!-- 2.5 -->
   <section class="chap" id="p2-5">
     <h2><span class="num">2.5</span>Normalization</h2>
-    <p>Why split data into tables and join them back? One big table is faster to read, up to a point, and that was an early criticism of the relational model. The cost is <strong>data redundancy</strong>. Here is the book’s BIG_UGLY_TABLE, with customers and sales in one table. Pick a problem to see it.</p>
+    <p>Why split data into tables and then join them back? One big table is faster to read, up to a point. This was an early criticism of the relational model. The cost is <strong>data redundancy</strong>: the same data stored more than once. Here is the book’s BIG_UGLY_TABLE, with customers and sales in one table. Pick a problem to see it.</p>
   </section>
   <figure class="wide">
     <div class="plate" data-dg="bigugly"></div>
     <div class="chips" id="bugBtns" aria-label="Show a problem"></div>
     <div class="note" id="bugNote" aria-live="polite"></div>
-    <figcaption><span class="src book">From the book</span><b>Book figure, p. 38, redrawn.</b> BIG_UGLY_TABLE. The anomaly views act out the book’s three examples; the new address (12 New Road) and the new customer in the insert view are invented for the illustration.</figcaption>
+    <figcaption><span class="src book">From the book</span><b>Book figure, p. 38, redrawn.</b> BIG_UGLY_TABLE. The anomaly views act out the book’s three examples. The new address (12 New Road) and the new customer in the insert view are invented for the illustration.</figcaption>
   </figure>
   <dl class="notation">
-    <dt>Wasted space</dt><dd>About 50 bytes of Amelia’s details per sale: 500 MB over ten million sales.</dd>
-    <dt>Update anomaly</dt><dd>When she moves, every copy must change. Miss one and the data contradicts itself.</dd>
-    <dt>Delete anomaly</dt><dd>Delete Richard Johnston’s only sale and his customer details vanish with it.</dd>
+    <dt>Wasted space</dt><dd>About 50 bytes of Amelia’s details per sale. Over ten million sales, that is 500 MB.</dd>
+    <dt>Update anomaly</dt><dd>An anomaly is an error caused by the design. When she moves, every copy must change. If you miss one, the data contradicts itself.</dd>
+    <dt>Delete anomaly</dt><dd>Delete Richard Johnston’s only sale, and his customer details disappear with it.</dd>
     <dt>Insert anomaly</dt><dd>You can’t record a customer until they buy something.</dd>
   </dl>
-  <p>Splitting data into related tables removes the redundancy. That is <strong>normalization</strong>. (The name, the book says, came from Codd hearing that Nixon was “normalizing relations” with China.) It is a set of rules, the <strong>normal forms</strong>, from first (1NF) to fifth (5NF), each removing more redundancy by splitting tables further. Boyce/Codd (BCNF) and Domain-Key (DK/NF) sit outside that ladder and the book skips them. Every table is in at least 1NF by definition; well-designed databases usually reach 3NF or 4NF.</p>
-  <p>The worked example starts by mashing PRODUCT, CUSTOMER and SALE into one table, ALL_SALES, and normalizing it back. The key idea is the <strong>functional dependency</strong>: <code>A → B</code> means that knowing A tells you B. Step through it:</p>
+  <p>Splitting data into related tables removes the redundancy. This is called <strong>normalization</strong>. (The book says the name came from Codd hearing that Nixon was “normalizing relations” with China.) Normalization is a set of rules called the <strong>normal forms</strong>. They go from first (1NF) to fifth (5NF). Each one removes more redundancy by splitting tables further. Boyce/Codd (BCNF) and Domain-Key (DK/NF) are outside this series of steps, and the book skips them. By definition, every table is in at least 1NF. Well-designed databases usually reach 3NF or 4NF.</p>
+  <p>The worked example starts by combining PRODUCT, CUSTOMER and SALE into one table, ALL_SALES. Then it normalizes it back. The key idea is the <strong>functional dependency</strong>. <code>A → B</code> means that if you know A, you know B. Step through it:</p>
   <figure class="wide">
     <div class="plate" data-dg="normal"></div>
     <div class="chips" id="nfBtns" aria-label="Choose a normal form"></div>
     <div class="note" id="nfNote" aria-live="polite"></div>
-    <figcaption><span class="src ill">Course illustration</span><b>Figure C.</b> The book’s normalization example (pp. 39–42), which it writes in text notation, drawn as entities with crow’s-foot links. ALL_SALES lists CustomerNo and ProductNo once here; the book’s list repeats them.</figcaption>
+    <figcaption><span class="src ill">Course illustration</span><b>Figure C.</b> The book’s normalization example (pp. 39–42). The book writes it in text notation. Here it is drawn as entities with crow’s-foot links. ALL_SALES lists CustomerNo and ProductNo once here. The book’s list repeats them.</figcaption>
   </figure>
   <div class="tablewrap"><table>
     <thead><tr><th>Form</th><th>Rule (the book’s definitions, reworded)</th><th>Problem it removes</th></tr></thead>
     <tbody>
       <tr><td>1NF</td><td>No repeating groups: every cell holds one value</td><td>Lists inside cells</td></tr>
-      <tr><td>2NF</td><td>Every column depends on the <em>whole</em> primary key</td><td>Partial dependencies on part of a composite key</td></tr>
-      <tr><td>3NF</td><td>Every column depends on the primary key <em>alone</em></td><td>Transitive dependencies (key → X → Y)</td></tr>
-      <tr><td>4NF</td><td>The key determines single values, not collections</td><td>Multi-valued dependencies (key →→ many values)</td></tr>
+      <tr><td>2NF</td><td>Every column depends on the <em>whole</em> primary key</td><td>Partial dependencies: columns that depend on only part of a composite key</td></tr>
+      <tr><td>3NF</td><td>Every column depends on the primary key <em>alone</em></td><td>Transitive dependencies: a column depends on the key through another column (key → X → Y)</td></tr>
+      <tr><td>4NF</td><td>The key determines single values, not collections (groups of values)</td><td>Multi-valued dependencies (key →→ many values)</td></tr>
     </tbody>
   </table></div>
-  <p>Two shortcuts: a table with a single-column primary key is automatically in 2NF (though a composite key doesn’t rule 2NF out), and 3NF is summed up as depending on “the key, the whole key, and nothing but the key”. The book reassures you that 4NF trips up experts too, and that most 3NF tables are already 4NF. 5NF is the theoretical limit; in practice there is little reason to go beyond 4NF, or even 3NF.</p>
-  <p>Normalization costs reads: the DBMS has to reassemble the pieces, and on the Web response time matters. So the book’s advice is to choose by workload. Mostly-read data like a catalog can be <strong>denormalized</strong>; mission-critical data such as finance should stay normalized even if slower. A common pattern keeps both: a normalized operational database feeding a denormalized <strong>data warehouse</strong>. Normalization is a bottom-up technique; Chapter 4 designs top-down with ER diagrams.</p>
-  <div class="aside pitfalls"><b>Common mistakes.</b> Adding <code>address2</code>, <code>address3</code> columns for “any number” of addresses (that is the 4NF problem; use a child table). Denormalizing before you have measured a slow query. And creating a surrogate key before the table is fully normalized: the book’s example deliberately waits until the end.</div>
+  <p>Two shortcuts help:</p>
+  <ul>
+    <li>A table with a single-column primary key is automatically in 2NF. (A table with a composite key can still be in 2NF.)</li>
+    <li>A short summary of 3NF: every column depends on “the key, the whole key, and nothing but the key”.</li>
+  </ul>
+  <p>The book tells you not to worry: 4NF confuses experts too, and most 3NF tables are already in 4NF. 5NF is the theoretical limit. In practice, there is little reason to go beyond 4NF, or even beyond 3NF.</p>
+  <p>Normalization makes reading more expensive. The DBMS has to put the pieces back together, and on the Web, response time matters. So the book advises you to choose based on the workload:</p>
+  <ul>
+    <li>Data that is mostly read, like a catalog, can be <strong>denormalized</strong> (kept in fewer, larger tables).</li>
+    <li>Mission-critical data, such as finance data, should stay normalized, even if it is slower.</li>
+  </ul>
+  <p>A common pattern keeps both. A normalized operational database feeds a denormalized <strong>data warehouse</strong> (a separate database for reports and analysis). Normalization is a bottom-up technique: it starts from the columns. Chapter 4 designs top-down, with ER diagrams.</p>
+  <div class="aside pitfalls"><b>Common mistakes.</b>
+    <ul>
+      <li>Adding <code>address2</code>, <code>address3</code> columns for “any number” of addresses. That is the 4NF problem. Use a child table instead.</li>
+      <li>Denormalizing before you have measured a slow query.</li>
+      <li>Creating a surrogate key before the table is fully normalized. The book’s example waits until the end on purpose.</li>
+    </ul></div>
 
   <!-- 2.6 -->
   <section class="chap" id="p2-6">
     <h2><span class="num">2.6</span>Data integrity</h2>
-    <p>Data has <strong>integrity</strong> when it is valid and internally consistent. You get there by defining integrity rules, usually during design (Chapter 4), and letting the DBMS enforce them. For legacy data or data you don’t control, the best you may manage is to identify where it breaks the rules. The concept applies to every data model, hierarchical included.</p>
-    <p>There are two kinds of rule. <strong>Built-in</strong> rules come with the data model and are mandatory. <strong>User-defined</strong> rules are the ones you, the developer, add, and they are optional, which means they may never get implemented. The book’s example: everyone “knows” no customer gets more than a 30% discount, but if that isn’t a rule in the database, nothing stops a program from giving 50%.</p>
+    <p>Data has <strong>integrity</strong> when it is valid and consistent with itself. To get there, you define integrity rules, usually during design (Chapter 4). Then you let the DBMS enforce them. Some data is old (legacy data), or you do not control it. For that data, the best you can do may be to find where it breaks the rules. The idea applies to every data model, including the hierarchical one.</p>
+    <p>There are two kinds of rule:</p>
+    <ul>
+      <li><strong>Built-in</strong> rules come with the data model. They are mandatory.</li>
+      <li><strong>User-defined</strong> rules are the ones you, the developer, add. They are optional, which means they may never get implemented.</li>
+    </ul>
+    <p>The book gives an example. Everyone “knows” that no customer gets more than a 30% discount. But if that is not a rule in the database, nothing stops a program from giving 50%.</p>
     <dl class="notation">
-      <dt>Entity integrity</dt><dd>Every row has a primary key, unique across the table, and <strong>no part of it may be null</strong>. You can’t prove uniqueness with nulls, because null can’t be compared.</dd>
+      <dt>Entity integrity</dt><dd>Every row has a primary key that is unique across the table. <strong>No part of it may be null</strong>. You can’t prove uniqueness with nulls, because null can’t be compared.</dd>
       <dt>Referential integrity</dt><dd>A foreign key value must match an existing primary key in the parent table, <strong>or be null</strong>. This is why sale 12348 is allowed.</dd>
       <dt>Domain integrity</dt><dd>Every value in a column comes from the column’s domain.</dd>
     </dl>
-    <p>The book’s sample rules: two employees can’t share a social security number (entity integrity, built in); every employee must have a name; gender must be present and be ‘f’ or ‘m’; a credit limit must be 0–5000 or null (all user-defined). Try some changes against the chapter’s tables:</p>
+    <p>The book gives these sample rules:</p>
+    <ul>
+      <li>Two employees can’t share a social security number. This is entity integrity, which is built in.</li>
+      <li>Every employee must have a name.</li>
+      <li>Gender must be present, and it must be ‘f’ or ‘m’.</li>
+      <li>A credit limit must be 0–5000 or null.</li>
+    </ul>
+    <p>The last three rules are all user-defined. Try some changes against the chapter’s tables:</p>
   </section>
   <div class="chips" id="intBtns" aria-label="Pick a change"></div>
   <div class="note" id="intNote" aria-live="polite"></div>
@@ -3715,72 +4140,88 @@ CREATE TABLE sale (
   amount      numeric(10,2),
   salesrep    varchar(60)
 );</code></pre>
-  <p>Rules belong as close to the data as possible, ideally inside the database, where a rogue program can’t bypass them. On the Web you also want instant feedback, so the book suggests sending some rules to the browser with the form (as JavaScript), as long as they come from <strong>one authoritative source</strong>.</p>
-  <p>Integrity rules guarantee data is <em>valid</em>, not that it is <em>correct</em>. “Brain Watlers” passes every rule as an employee name and is still a typo. The book’s defence is double entry or verification on top of the rules. Garbage in, garbage out.</p>
-  <div class="aside"><b>Front-end tie-in.</b> The modern version of “one authoritative source” is a shared schema, for example a Zod schema imported by both the React form and the API handler. Keep the database constraints as well: they are the only rules that every client, script and migration must pass through.</div>
+  <p>Rules belong as close to the data as possible. The best place is inside the database, where a badly behaved program can’t get around them. On the Web, you also want instant feedback. So the book suggests sending some rules to the browser with the form, as JavaScript. But these rules must come from <strong>one authoritative source</strong> (one official place where each rule is defined).</p>
+  <p>Integrity rules guarantee that data is <em>valid</em>. They do not guarantee that it is <em>correct</em>. As an employee name, “Brain Watlers” passes every rule, but it is still a typo. The book’s protection is double entry or verification, in addition to the rules. If you put wrong data in, you get wrong data out.</p>
+  <div class="aside"><b>Front-end tie-in.</b> Today, “one authoritative source” is usually a shared schema. An example is a Zod schema that both the React form and the API handler import. Keep the database constraints too. They are the only rules that every client, script and migration must pass through.</div>
 
   <!-- 2.7 -->
   <section class="chap" id="p2-7">
     <h2><span class="num">2.7</span>Metadata and the data dictionary</h2>
-    <p>Creating a database involves two jobs: defining its structures (tables, columns, types, keys) and filling it with data. The first produces <strong>metadata</strong>, data about the database. The DBMS files it in the <strong>catalog</strong> or <strong>data dictionary</strong>, which holds:</p>
+    <p>Creating a database involves two jobs:</p>
     <ul>
-      <li>table definitions (name, number of columns, primary key, physical storage) and column definitions (name, type, size, owning table);</li>
+      <li>defining its structures (tables, columns, types, keys);</li>
+      <li>filling it with data.</li>
+    </ul>
+    <p>The first job produces <strong>metadata</strong>, which is data about the database. The DBMS stores it in the <strong>catalog</strong>, also called the <strong>data dictionary</strong>. It holds:</p>
+    <ul>
+      <li>table definitions (name, number of columns, primary key, physical storage) and column definitions (name, type, size, the table it belongs to);</li>
       <li>integrity rules, index details, users and passwords, and access privileges (Chapter 7);</li>
       <li>statistics such as table sizes, row sizes and query counts.</li>
     </ul>
-    <p>The dictionary can be huge (the book notes Oracle’s has hundreds of tables) and usually uses the same model as the data, so in an RDBMS it is just more tables. The DBMS uses it mainly to run itself.</p>
+    <p>The dictionary can be huge. The book notes that Oracle’s has hundreds of tables. It usually uses the same model as the data. So in an RDBMS, it is just more tables. The DBMS uses it mainly to run itself.</p>
   </section>
   <p class="codehead">PostgreSQL · reading the data dictionary (course addition)</p>
 <pre><code class="sql">SELECT column_name, data_type, is_nullable
 FROM information_schema.columns
 WHERE table_name = 'customer';</code></pre>
-  <div class="aside"><b>Front-end tie-in.</b> Tools like Drizzle Kit and Prisma read exactly these catalog tables when they introspect a database or generate a migration diff. Typed query builders are metadata turned into TypeScript types.</div>
+  <div class="aside"><b>Front-end tie-in.</b> Tools like Drizzle Kit and Prisma read exactly these catalog tables. They do this when they introspect a database (read its structure) or generate a migration diff. Typed query builders are metadata turned into TypeScript types.</div>
 
   <!-- 2.8 -->
   <section class="chap" id="p2-8">
     <h2><span class="num">2.8</span>Physical data access methods</h2>
-    <p>Everything so far was logical. Performance, though, is decided at the <strong>physical storage level</strong>, which sits below the relational model; the model itself says nothing about it. The bottleneck is the disk. Memory answers in nanoseconds, disk in milliseconds, so RAM can be up to a million times faster. One slow read doesn’t matter; millions per second on a busy site do, and the book reminds you that users get twitchy after about three seconds.</p>
-    <p>Disks can’t be made much faster, and whole databases rarely fit in RAM (the book cites companies with 10 to 40 terabytes), so the goal is <strong>to touch the disk as rarely as possible</strong>. Data lives in files split into fixed-size <strong>blocks</strong> (or <strong>pages</strong>), each holding several records. A block is the smallest unit the DBMS reads or writes. There are three ways to find a record by a key value (here “key” means a search key, not necessarily the primary key):</p>
+    <p>Everything so far was logical. But performance is decided at the <strong>physical storage level</strong>. This level sits below the relational model, and the model itself says nothing about it. The slowest part is the disk. Memory answers in nanoseconds, but the disk answers in milliseconds. So RAM can be up to a million times faster. One slow read doesn’t matter. Millions of reads per second on a busy site do matter. The book reminds you that users become impatient after about three seconds.</p>
+    <p>Disks can’t be made much faster. Whole databases rarely fit in RAM (the book mentions companies with 10 to 40 terabytes). So the goal is <strong>to touch the disk as rarely as possible</strong>. Data lives in files. The files are split into <strong>blocks</strong> (also called <strong>pages</strong>) of a fixed size. Each block holds several records. A block is the smallest unit the DBMS reads or writes. There are three ways to find a record by a key value. (Here “key” means a search key, not necessarily the primary key.)</p>
     <dl class="notation">
-      <dt>Sequential access</dt><dd>Read from the start of the file until the key turns up: a <strong>table scan</strong>, like reading the phone book cover to cover. On average you read half the records. Fine for fifty rows, hopeless for fifty million.</dd>
-      <dt>Indexed access</dt><dd>Look the key up in an <strong>index</strong>, a separately stored directory that says where the record is. The usual kind is the <strong>B-tree</strong>.</dd>
-      <dt>Direct access</dt><dd>Feed the key to a <strong>hash function</strong> that computes the record’s disk location. Usually one disk access.</dd>
+      <dt>Sequential access</dt><dd>Read from the start of the file until the key appears. This is a <strong>table scan</strong>. It is like reading the phone book from the first page to the last. On average you read half the records. This is fine for fifty rows, but far too slow for fifty million.</dd>
+      <dt>Indexed access</dt><dd>Look up the key in an <strong>index</strong>. An index is a directory, stored separately, that says where the record is. The usual kind is the <strong>B-tree</strong>.</dd>
+      <dt>Direct access</dt><dd>Give the key to a <strong>hash function</strong>. The function calculates the record’s location on disk. This usually needs one disk access.</dd>
     </dl>
   </section>
   <figure class="wide">
     <div class="plate" data-dg="btree"></div>
     <div class="chips" id="btBtns" aria-label="Choose a search"></div>
     <div class="note" id="btNote" aria-live="polite"></div>
-    <figcaption><span class="src book">From the book</span><b>Book figure, p. 47, redrawn.</b> A three-level B-tree on client surnames. The book draws a pointer from every leaf entry to the records; here there is one per leaf. Two leaves in the book are slightly out of order (Hart before Harris, Wilson before Van plat); they are kept as printed. The “Ellis” and “starts with S” searches are course additions.</figcaption>
+    <figcaption><span class="src book">From the book</span><b>Book figure, p. 47, redrawn.</b> A three-level B-tree on client surnames. The book draws a pointer from every leaf entry to the records. Here there is one pointer per leaf. Two leaves in the book are slightly out of order (Hart before Harris, Wilson before Van plat). They are kept as printed. The “Ellis” and “starts with S” searches are course additions.</figcaption>
   </figure>
-  <p>Each node holds key values in sorted order and pointers down. In the second-level node “Chen | Fenton”, keys up to Chen are under the left pointer, keys after Chen up to Fenton under the middle one, and the rest (up to Harris) under the right. <strong>Leaf nodes</strong> point at the records on disk. Finding “Tudor” takes at most four disk reads (three nodes and the record); a small index like this sits in RAM, so usually just one. A table scan of these 27 records would average fourteen reads in the worst case of one record per block.</p>
-  <p>Because keys are sorted, B-trees are good at <strong>range retrievals</strong> (“surnames starting with C”): find the first match and scan right. Records with similar keys also tend to sit in the same block, so the next one is often already in memory. The index can be <strong>unique</strong> or <strong>non-unique</strong>; this one is non-unique (two Joneses, two Smiths).</p>
-  <p>The cost: inserts, deletes and key changes make the DBMS keep the tree in order, sometimes rebuilding part of it while nobody can use it. So index freely when data rarely changes, carefully when it changes a lot. Indexing primary keys is usually safe because they shouldn’t change (many products do it automatically), and tiny tables don’t need indexes at all: ten rows probably fit in one block.</p>
-  <p><strong>Hashing</strong> decides where each record is placed, inside a reserved “hash space”, and spreads records out evenly. That makes single-record lookups on very large tables (millions of rows) as fast as it gets, but neighbouring keys end up in different blocks, so ranges are slow. The book’s verdict: hashing is a sledgehammer; for most databases indexes are enough. Compare all three:</p>
+  <p>Each node holds key values in sorted order, plus pointers down to the next level. Look at the second-level node “Chen | Fenton”:</p>
+  <ul>
+    <li>Keys up to Chen are under the left pointer.</li>
+    <li>Keys after Chen, up to Fenton, are under the middle pointer.</li>
+    <li>The rest (up to Harris) are under the right pointer.</li>
+  </ul>
+  <p><strong>Leaf nodes</strong> (the nodes on the bottom level) point to the records on disk. Finding “Tudor” takes at most four disk reads: three nodes and the record. A small index like this stays in RAM, so it usually takes just one read. Now take the worst case for a table scan, with one record per block. A scan of these 27 records would need fourteen reads on average.</p>
+  <p>The keys are sorted, so B-trees are good at <strong>range retrievals</strong>, such as “surnames starting with C”. Find the first match, then scan to the right. Records with similar keys also tend to be in the same block. So the next record is often already in memory. An index can be <strong>unique</strong> or <strong>non-unique</strong>. This one is non-unique (two Joneses, two Smiths).</p>
+  <p>Indexes have a cost. Inserts, deletes and key changes force the DBMS to keep the tree in order. Sometimes it rebuilds part of the tree, and nobody can use that part during the rebuild. So add indexes freely when data rarely changes. Add them carefully when data changes a lot. Indexing primary keys is usually safe, because primary keys shouldn’t change. Many products index them automatically. Very small tables don’t need indexes at all: ten rows probably fit in one block.</p>
+  <p><strong>Hashing</strong> decides where each record is placed, inside a reserved “hash space”. It spreads the records out evenly. This makes single-record lookups on very large tables (millions of rows) as fast as possible. But neighbouring keys end up in different blocks, so ranges are slow. The book’s conclusion: hashing is a very heavy tool, and for most databases indexes are enough. Compare all three:</p>
   <figure class="wide">
     <div class="plate" data-dg="access"></div>
     <div class="chips" id="accBtns" aria-label="Choose an access method"></div>
     <div class="note" id="accNote" aria-live="polite"></div>
-    <figcaption><span class="src ill">Course illustration</span><b>Figure D.</b> The three access methods on a toy file of 24 surnames in 8 blocks. Block contents are invented; read counts follow the book’s reasoning.</figcaption>
+    <figcaption><span class="src ill">Course illustration</span><b>Figure D.</b> The three access methods on a small example file of 24 surnames in 8 blocks. The block contents are invented. The read counts follow the book’s reasoning.</figcaption>
   </figure>
   <p class="codehead">PostgreSQL · the two index kinds (course addition; the book covers indexes in Chapter 8)</p>
 <pre><code class="sql">CREATE INDEX customer_last_idx ON customer (last);               -- B-tree, the default
 CREATE INDEX sale_no_hash      ON sale USING hash (sale_no);     -- equality lookups only</code></pre>
-  <div class="aside"><b>Then vs now.</b> SSDs cut a random read from milliseconds to tens or hundreds of microseconds, but RAM is still around a thousand times faster, so the book’s rule of thumb holds: fewer disk reads, faster queries. Terabyte databases are routine now, and in-memory stores like Redis cover the “keep it all in RAM” case for small, hot data.</div>
-  <div class="aside pitfalls"><b>Common mistakes.</b> Indexing every column “just in case” on a write-heavy table; expecting a hash index to help <code>WHERE last LIKE 'S%'</code> or <code>ORDER BY</code>; and forgetting to index foreign key columns you join on.</div>
+  <div class="aside"><b>Then vs now.</b> SSDs cut a random read from milliseconds to tens or hundreds of microseconds. But RAM is still around a thousand times faster. So the book’s general guideline still holds: fewer disk reads mean faster queries. Terabyte databases are normal now. In-memory stores like Redis cover the “keep it all in RAM” case for small data that is used very often.</div>
+  <div class="aside pitfalls"><b>Common mistakes.</b>
+    <ul>
+      <li>Indexing every column “just in case” on a table with many writes.</li>
+      <li>Expecting a hash index to help <code>WHERE last LIKE 'S%'</code> or <code>ORDER BY</code>.</li>
+      <li>Forgetting to index the foreign key columns you join on.</li>
+    </ul></div>
 
   <!-- 2.9 -->
   <section class="chap" id="p2-9">
     <h2><span class="num">2.9</span>Fitting it all together</h2>
-    <p>The chapter ends with one picture. Data and metadata sit at the core, wrapped in indexes and integrity rules; together they are one <strong>database</strong>. The <strong>DBMS</strong> manages it and possibly other databases, and all access by users and applications goes through the DBMS. Security, transactions, APIs and data manipulation are left out for later chapters. Click a layer.</p>
+    <p>The chapter ends with one picture. Data and metadata are at the center. Indexes and integrity rules surround them. Together they form one <strong>database</strong>. The <strong>DBMS</strong> manages it, and possibly other databases too. All access by users and applications goes through the DBMS. Security, transactions, APIs and data manipulation are left for later chapters. Click a layer.</p>
   </section>
   <figure class="wide">
     <div class="plate" data-dg="layers"></div>
     <div class="note" id="layNote" aria-live="polite"></div>
-    <figcaption><span class="src book">From the book</span><b>Book figure, p. 49, redrawn.</b> How the chapter’s concepts fit together. The book’s database ring is slightly off-center; it is centered here.</figcaption>
+    <figcaption><span class="src book">From the book</span><b>Book figure, p. 49, redrawn.</b> How the chapter’s concepts fit together. The book’s database ring is slightly off-center. Here it is centered.</figcaption>
   </figure>
-  <p>The summary adds some perspective. The relational model beat the hierarchical and network models on flexibility and simplicity, yet both have come back in new forms: <strong>hierarchical as XML</strong> and <strong>network as objects</strong>. Mapping between tables and objects is fairly easy, but there was no single accepted object model (the ODMG’s attempt saw patchy adoption), and relational vendors were adding object and XML features anyway. The one big controversy inside the relational world has been nulls: one camp supports them, the other prefers default values.</p>
-  <div class="aside"><b>Then vs now.</b> The “XML is the new hierarchical model” line reads today as “JSON is”: document stores and <code>JSONB</code> columns hold tree-shaped data, with the same trade-offs the book describes. And the nulls debate never ended; it just moved into language design (<code>strictNullChecks</code>, <code>Option</code> types).</div>
+  <p>The summary puts things in a wider context. The relational model won against the hierarchical and network models because it is more flexible and simpler. But both older models have come back in new forms: <strong>hierarchical as XML</strong> and <strong>network as objects</strong>. Mapping between tables and objects is fairly easy. But there was no single accepted object model. (The ODMG tried to create one, but only some products adopted it.) Also, relational vendors were adding object and XML features anyway. Inside the relational world, the one big argument has been about nulls. One group supports them. The other group prefers default values.</p>
+  <div class="aside"><b>Then vs now.</b> Today, the idea “XML is the new hierarchical model” would be “JSON is”. Document stores and <code>JSONB</code> columns hold data shaped like a tree, with the same trade-offs the book describes. And the debate about nulls never ended. It just moved into language design (<code>strictNullChecks</code>, <code>Option</code> types).</div>
 
   <!-- Review -->
   <section class="chap" id="review">
@@ -3797,11 +4238,11 @@ CREATE INDEX sale_no_hash      ON sale USING hash (sale_no);     -- equality loo
     </table></div>
     <h3>Keys and integrity</h3>
     <dl class="notation">
-      <dt>Primary key</dt><dd>Unique, never null (not even partly), shouldn’t change. Exactly one per table.</dd>
+      <dt>Primary key</dt><dd>Unique. Never null (not even partly). Shouldn’t change. Exactly one per table.</dd>
       <dt>Alternate key</dt><dd>Any other unique identifier.</dd>
       <dt>Surrogate key</dt><dd>An invented identifier, often generated by the RDBMS.</dd>
-      <dt>Foreign key</dt><dd>Another table’s key embedded in a child table; must match a parent row or be null; may repeat.</dd>
-      <dt>Built-in rules</dt><dd>Entity, referential and domain integrity. Everything else is user-defined and optional.</dd>
+      <dt>Foreign key</dt><dd>Another table’s key, stored in a child table. Must match a parent row or be null. May repeat.</dd>
+      <dt>Built-in rules</dt><dd>Entity, referential and domain integrity. All other rules are user-defined and optional.</dd>
     </dl>
     <h3>Access methods</h3>
     <div class="tablewrap"><table>
@@ -3877,21 +4318,21 @@ const D = {};
 D.dmodel = () => {
   let s = T(125, 30, "Every data model has three aspects", "sm");
   [["Structure","how data is represented","Structure: how the DBMS represents data. In the relational model: tables, rows and columns."],
-   ["Integrity","what keeps data valid","Integrity: how the DBMS stops invalid data getting in, or existing data becoming invalid (section 2.6)."],
-   ["Operations","add, change, delete, read","Operations: ways to add, delete, modify and retrieve data. Query languages such as SQL live here (Chapter 3)."]]
+   ["Integrity","what keeps data valid","Integrity: how the DBMS stops invalid data from getting in. It also stops existing data from becoming invalid (section 2.6)."],
+   ["Operations","add, change, delete, read","Operations: ways to add, delete, change and retrieve data. Query languages such as SQL belong here (Chapter 3)."]]
     .forEach(([t, sub, tip], i) => s += G(tip, box(20, 44 + 68 * i, 210, 56, t, sub, 6)));
-  s += `<g class="v-early">` + REL("Without a DBMS, every program reads and writes the files itself, so it must know where they are, what they are called and how they are laid out.", "M495 64V224", "l", "mf",
+  s += `<g class="v-early">` + REL("Without a DBMS, every program reads and writes the files itself. So it must know where the files are, what they are called and how they are laid out.", "M495 64V224", "l", "mf",
     T(505, 140, "every program knows", "sm", "start") + T(505, 156, "the file names and layouts", "sm", "start")) + `</g>`;
   s += `<g class="v-logic">` +
     REL("Programs are written against the logical model only.", "M495 64V96", "l", "mf") +
     REL("The DBMS translates logical requests into physical reads and writes.", "M495 150V170", "l", "mf") +
     REL("Only the DBMS touches the physical files.", "M495 202V224", "l", "mf") +
-    G("The logical data model: what programs see. For a relational DBMS, tables, rows and columns, with no file names or disk layouts.", box(330, 98, 330, 52, "Logical data model", "tables · rows · columns", 6)) +
-    G("The mapping from logical to physical structures belongs to the DBMS. If storage changes, the vendor’s mapping changes, not your code.", R(330, 172, 330, 30, "dashb", 4) + T(495, 192, "DBMS maps logical → physical", "sm2")) + `</g>`;
+    G("The logical data model: what programs see. For a relational DBMS, this means tables, rows and columns. There are no file names or disk layouts.", box(330, 98, 330, 52, "Logical data model", "tables · rows · columns", 6)) +
+    G("The DBMS owns the mapping from logical to physical structures. If storage changes, the vendor’s mapping changes. Your code stays the same.", R(330, 172, 330, 30, "dashb", 4) + T(495, 192, "DBMS maps logical → physical", "sm2")) + `</g>`;
   s += G("Applications and users: the people and programs that need the data.", box(330, 20, 330, 44, "Applications and users", "", 6));
   s += G("Physical storage: files, blocks and indexes on disk.", R(330, 226, 330, 66, "b2", 6) + T(342, 244, "Physical storage", "sm2 hd", "start"));
   const FILES = { a:["customer.dat","sale.dat","product.dat"], b:["disk1/part_a","disk2/part_b","disk3/part_c"] };
-  ["a","b"].forEach(k => s += `<g class="v-files-${k}">` + FILES[k].map((f, i) => G(k === "a" ? `A physical file: ${f}.` : `After reorganizing, the same tables are spread over three disks (${f}). Programs written to the logical model don’t notice.`,
+  ["a","b"].forEach(k => s += `<g class="v-files-${k}">` + FILES[k].map((f, i) => G(k === "a" ? `A physical file: ${f}.` : `After reorganizing, the same tables are spread over three disks (${f}). Programs written for the logical model don’t notice.`,
     R(345 + i * 105, 254, 95, 26, "b", 3) + T(392 + i * 105, 271, f, "sm2"))).join("") + `</g>`);
   return SVG(720, 305, "Three aspects of a data model, and a logical data model layered between applications and physical storage", s);
 };
@@ -3905,15 +4346,15 @@ const SETS = [
 D.sets = () => {
   let s = "";
   const colX = [140, 290, 400, 500], colW = [150, 110, 100, 80];
-  SETS.forEach((st, i) => s += REL(`Each value in the ${st.name} column is drawn from this set: the column’s domain.`, `M${st.cx} 186L${colX[i] + colW[i] / 2} 230`, "d", "mf"));
+  SETS.forEach((st, i) => s += REL(`Each value in the ${st.name} column comes from this set. This set is the column’s domain.`, `M${st.cx} 186L${colX[i] + colW[i] / 2} 230`, "d", "mf"));
   SETS.forEach(st => {
     let g = `<ellipse cx="${st.cx}" cy="115" rx="${st.rx}" ry="70" class="b"/>` + T(st.cx, 34, st.name, "hd");
     const y0 = 115 - (st.vals.length - 1) * 8 + 4;
     st.vals.forEach((v, i) => g += T(st.cx, y0 + 16 * i, v, "sm2", "middle", v === "…" ? "" : `data-v="${esc(st.name + ":" + v)}"`));
-    s += G(`The set of employee ${st.name.toLowerCase()} values. A set holds values of one kind, with no duplicates and no order.`, g);
+    s += G(`The set of employee ${st.name.toLowerCase()} values. A set holds values of one kind. It has no duplicates and no order.`, g);
   });
   s += tbl(140, 232, "EMPLOYEE", [["Name",150],["Position",110],["Location",100],["Salary",80,"r"]], EMP,
-    { nameTip:"The relation EMPLOYEE: every row takes one value from each set.", rowTip: i => `Row ${i + 1}: one employee, one value from each of the four sets.` });
+    { nameTip:"The relation EMPLOYEE. Every row takes one value from each set.", rowTip: i => `Row ${i + 1}: one employee. It has one value from each of the four sets.` });
   return SVG(720, 370, "Four sets of values combined into the EMPLOYEE table", s);
 };
 
@@ -3938,7 +4379,7 @@ function propsBody(k){
       return "";
     }
   });
-  s += G(st.ok ? "The data values haven’t changed, so it is the same relation." : "The data itself has changed or broken a rule of the relational model.",
+  s += G(st.ok ? "The data values haven’t changed, so it is the same relation." : "The data itself has changed, or it breaks a rule of the relational model.",
     R(510, 40, 190, 74, st.ok ? "b" : "dashb", 6) + T(605, 70, st.v1, "hd", "middle", st.ok ? ACC : BAD) + T(605, 92, st.v2, "sm"));
   return s;
 }
@@ -3946,20 +4387,20 @@ D.props = () => SVG(720, 182, "An experiment on the EMPLOYEE table: shuffling ro
 
 D.salesfk = () => {
   let s = "";
-  s += REL("Foreign key: SALE.CustomerNo holds a CUSTOMER primary key value (or null). The arrow runs from child to parent.", "M231 220V196H83V166", "l", "mf",
+  s += REL("Foreign key: SALE.CustomerNo holds a primary key value from CUSTOMER (or null). The arrow goes from child to parent.", "M231 220V196H83V166", "l", "mf",
     T(245, 200, "CustomerNo refers to CUSTOMER", "sm", "start"));
-  s += REL("Foreign key: SALE.ProductNo holds a PRODUCT primary key value.", "M316 418V448H82V474", "l", "mf",
+  s += REL("Foreign key: SALE.ProductNo holds a primary key value from PRODUCT.", "M316 418V448H82V474", "l", "mf",
     T(330, 444, "ProductNo refers to PRODUCT", "sm", "start"));
   s += tbl(40, 10, "CUSTOMER", [["CustomerNo",86,"",1],["First",70],["Last",80],["Address",130],["CreditLimit",84,"r"]], CUST,
     { nameTip:"Parent table CUSTOMER. Primary key: CustomerNo (underlined).", rowTip: i => `Customer ${CUST[i][0]}: ${CUST[i][1]} ${CUST[i][2]}.`, rowAttr: i => `data-cust="${CUST[i][0]}"` });
   s += tbl(40, 220, "SALE", [["SaleNo",58,"",1],["SaleDate",90],["CustomerNo",86],["ProductNo",84],["Qty",46,"r"],["Amount",70,"r"],["Salesrep",106]], SALE,
-    { nameTip:"Child table SALE. Primary key: SaleNo. Two foreign keys: CustomerNo and ProductNo.",
+    { nameTip:"Child table SALE. Primary key: SaleNo. It has two foreign keys: CustomerNo and ProductNo.",
       rowTip: i => `Sale ${SALE[i][0]}. Click to follow its foreign keys.`, rowAttr: i => `data-sale="${i}" role="button"` });
   s += tbl(40, 476, "PRODUCT", [["ProductNo",84,"",1],["Description",140],["ReorderLevel",96,"r"],["Price",56,"r"],["QtyInStock",84,"r"]], PROD,
     { nameTip:"Parent table PRODUCT. Primary key: ProductNo.", rowTip: i => `Product ${PROD[i][0]}: ${PROD[i][1]}.`, rowAttr: i => `data-prod="${PROD[i][0]}"` });
-  s += G("CUSTOMER is a parent table: its key is referenced by SALE.", R(560, 66, 120, 44, "dashb", 6) + T(620, 85, "parent table", "sm2 hd") + T(620, 101, "referenced", "sm"));
+  s += G("CUSTOMER is a parent table. SALE refers to its key.", R(560, 66, 120, 44, "dashb", 6) + T(620, 85, "parent table", "sm2 hd") + T(620, 101, "referenced", "sm"));
   s += G("SALE is the child table: it holds the foreign keys.", R(600, 300, 110, 44, "dashb", 6) + T(655, 319, "child table", "sm2 hd") + T(655, 335, "2 foreign keys", "sm"));
-  s += G("PRODUCT is a parent table: its key is referenced by SALE.", R(560, 532, 120, 44, "dashb", 6) + T(620, 551, "parent table", "sm2 hd") + T(620, 567, "referenced", "sm"));
+  s += G("PRODUCT is a parent table. SALE refers to its key.", R(560, 532, 120, 44, "dashb", 6) + T(620, 551, "parent table", "sm2 hd") + T(620, 567, "referenced", "sm"));
   return SVG(720, 640, "CUSTOMER and PRODUCT parent tables linked to the SALE child table by foreign keys", s);
 };
 
@@ -3970,12 +4411,12 @@ function bugBody(mode){
   let s = "";
   /* column-group brackets */
   s += G("Columns 1–6 describe the sale.", P("M8 24V18H448V24") + T(228, 13, "sale data", "sm"));
-  s += G("Columns 7–11 describe the customer, copied into every sale row.", P("M454 24V18H782V24") + T(618, 13, "customer data", "sm"));
+  s += G("Columns 7–11 describe the customer. They are copied into every sale row.", P("M454 24V18H782V24") + T(618, 13, "customer data", "sm"));
   const rows = BUG.map(r => r.slice());
   if (mode === "upd") rows[2][9] = "12 New Road";
   s += tbl(7, 28, "BIG_UGLY_TABLE", BUG_COLS, rows, {
     nameTip:"BIG_UGLY_TABLE: sales and customers in one table.",
-    rowTip: i => mode === "del" && i === 0 ? "Deleting sale 12345 also deletes the only copy of Richard Johnston’s customer details." : `Sale ${rows[i][0]} with its customer’s details repeated alongside.`,
+    rowTip: i => mode === "del" && i === 0 ? "Deleting sale 12345 also deletes the only copy of Richard Johnston’s customer details." : `Sale ${rows[i][0]}. Its customer’s details are repeated in the same row.`,
     rowAttr: i => mode === "del" && i === 0 ? 'style="opacity:.45"' : "",
     cellAttr: (ri, ci) => {
       if (mode === "red" && (ri === 2 || ri === 4) && ci >= 6) return ACC;
@@ -3992,7 +4433,7 @@ function bugBody(mode){
       const c = BUG_COLS[i]; const r = c[2] === "r";
       g += T(r ? cx + c[1] - 6 : cx + 6, y + 15, v, v === "<null>" ? "sm it" : "sm2", r ? "end" : "start", i === 0 ? BAD : ""); cx += c[1];
     });
-    s += G("A new customer who hasn’t bought anything: every sale column, including the key SaleNo, would be null. The row can’t be stored. (Customer invented for the illustration.)", g);
+    s += G("A new customer who hasn’t bought anything. Every sale column would be null, including the key SaleNo. So the row can’t be stored. (The customer is invented for the illustration.)", g);
   }
   return s;
 }
@@ -4003,10 +4444,10 @@ D.normal = () => {
   let s = "";
   /* 1NF */
   const ALL = ["PK ProductNo","PK CustomerNo","PK SaleNo","Description","ReorderLevel","Price","QtyInStock","First","Last","Address","CreditLimit","SaleDate","Qty","Amount","Salesrep"];
-  let v1 = entity(40, 16, 190, "ALL_SALES", ALL, "ALL_SALES: everything in one table. Already 1NF (no repeating groups); its key is ProductNo + CustomerNo + SaleNo.");
+  let v1 = entity(40, 16, 190, "ALL_SALES", ALL, "ALL_SALES: everything in one table. It is already in 1NF (no repeating groups). Its key is ProductNo + CustomerNo + SaleNo.");
   const br = (a, b, label, tip) => { const top = 16 + 50 + 18 * a - 9, bot = 16 + 50 + 18 * b + 2, mid = (top + bot) / 2;
     return G(tip, P(`M242 ${top}H250V${bot}H242`) + T(262, mid + 4, label, "sm2", "start")); };
-  v1 += br(3, 6, "ProductNo → Description, ReorderLevel, Price, QtyInStock", "These four columns depend on ProductNo alone, only part of the key: a partial dependency.");
+  v1 += br(3, 6, "ProductNo → Description, ReorderLevel, Price, QtyInStock", "These four columns depend on ProductNo alone. That is only part of the key, so this is a partial dependency.");
   v1 += br(7, 10, "CustomerNo → First, Last, Address, CreditLimit", "Customer details depend on CustomerNo alone.");
   v1 += br(11, 14, "SaleNo → SaleDate, Qty, Amount, Salesrep", "Sale details depend on SaleNo alone.");
   v1 += G("The composite primary key, and the problem with it.", R(262, 18, 430, 50, "dashb", 6) + T(276, 38, "Key: ProductNo + CustomerNo + SaleNo", "sm2 hd", "start") + T(276, 56, "but each group of columns depends on only part of it", "sm", "start"));
@@ -4016,26 +4457,26 @@ D.normal = () => {
   const SA = ["PK SaleNo","SaleDate","FK CustomerNo","FK ProductNo","Qty","Amount","Salesrep"];
   const PR5 = ["PK ProductNo","Description","ReorderLevel","Price","QtyInStock"], PR6 = PR5.concat(["FK SupplierCode"]);
   const links = () =>
-    REL("CUSTOMER to SALE: a customer has many sales; a sale has zero or one customer (null for a cash sale).", "M200 80H270", "l", "cfN", `<path d="M200 80H202" class="l" marker-start="url(#cf01)"/>`) +
-    REL("PRODUCT to SALE: a product appears in many sales; each sale is for exactly one product.", "M530 80H460", "l", "cfN", `<path d="M530 80H528" class="l" marker-start="url(#cf11)"/>`);
-  const sale = () => entity(270, 40, 190, "SALE", SA, "SALE: everything determined by SaleNo, with foreign keys to CUSTOMER and PRODUCT.");
+    REL("CUSTOMER to SALE: a customer has many sales. A sale has zero or one customer (null for a cash sale).", "M200 80H270", "l", "cfN", `<path d="M200 80H202" class="l" marker-start="url(#cf01)"/>`) +
+    REL("PRODUCT to SALE: a product appears in many sales. Each sale is for exactly one product.", "M530 80H460", "l", "cfN", `<path d="M530 80H528" class="l" marker-start="url(#cf11)"/>`);
+  const sale = () => entity(270, 40, 190, "SALE", SA, "SALE: everything that SaleNo determines. It has foreign keys to CUSTOMER and PRODUCT.");
   /* 2NF */
-  s += `<g class="nf" data-nf="2">` + links() + entity(10, 40, 190, "CUSTOMER", CU5, "CUSTOMER: everything determined by CustomerNo.") + sale() +
-    entity(530, 40, 180, "PRODUCT", PR5, "PRODUCT: everything determined by ProductNo.") +
+  s += `<g class="nf" data-nf="2">` + links() + entity(10, 40, 190, "CUSTOMER", CU5, "CUSTOMER: everything that CustomerNo determines.") + sale() +
+    entity(530, 40, 180, "PRODUCT", PR5, "PRODUCT: everything that ProductNo determines.") +
     G("Each table now has a single-column key, so every column depends on the whole key.", R(150, 250, 420, 44, "dashb", 6) + T(360, 270, "Back to the original three tables:", "sm2 hd") + T(360, 286, "single-column keys, so automatically 2NF", "sm")) + `</g>`;
   /* 3NF */
-  const sup = () => REL("SUPPLIER to PRODUCT: a supplier supplies many products; SupplierCode stays in PRODUCT as a foreign key.", "M620 240V184", "l", "cfN", `<path d="M620 240V238" class="l" marker-start="url(#cf11)"/>`) +
+  const sup = () => REL("SUPPLIER to PRODUCT: a supplier supplies many products. SupplierCode stays in PRODUCT as a foreign key.", "M620 240V184", "l", "cfN", `<path d="M620 240V238" class="l" marker-start="url(#cf11)"/>`) +
     entity(530, 240, 180, "SUPPLIER", ["PK SupplierCode","SupplierName","SupplierAddress"], "SUPPLIER: split out of PRODUCT to remove the transitive dependency.");
   s += `<g class="nf" data-nf="3">` + links() + sup() + entity(10, 40, 190, "CUSTOMER", CU5, "CUSTOMER, unchanged.") + sale() +
-    entity(530, 40, 180, "PRODUCT", PR6, "PRODUCT keeps SupplierCode as a foreign key; supplier name and address moved out.") +
-    G("The book first adds supplier columns to PRODUCT. Supplier details then depend on SupplierCode, which depends on ProductNo: a transitive dependency.",
+    entity(530, 40, 180, "PRODUCT", PR6, "PRODUCT keeps SupplierCode as a foreign key. The supplier name and address moved out.") +
+    G("The book first adds supplier columns to PRODUCT. Then the supplier details depend on SupplierCode, and SupplierCode depends on ProductNo. This is a transitive dependency.",
       R(10, 250, 490, 62, "dashb", 6) + T(22, 270, "Before the split:", "sm2 hd", "start") + T(22, 287, "PRODUCT(ProductNo, …, SupplierCode, SupplierName, SupplierAddress)", "sm2", "start") + T(22, 304, "ProductNo → SupplierCode → {SupplierName, SupplierAddress}", "sm", "start")) + `</g>`;
   /* 4NF */
   s += `<g class="nf" data-nf="4">` + links() + sup() +
     REL("CUSTOMER to CUSTOMER_ADDRESS: a customer can have any number of addresses.", "M105 148V240", "l", "cf0N", `<path d="M105 148V150" class="l" marker-start="url(#cf11)"/>`) +
     entity(10, 40, 190, "CUSTOMER", CU4, "CUSTOMER without Address.") + sale() + entity(530, 40, 180, "PRODUCT", PR6, "PRODUCT, as in 3NF.") +
-    entity(10, 240, 190, "CUSTOMER_ADDRESS", ["PK CustomerNo","PK Address"], "CUSTOMER_ADDRESS: one row per customer and address. The key is both columns; CustomerNo is also a foreign key.") +
-    G("If customers can have any number of addresses, CustomerNo determines a collection of addresses, not one value: a multi-valued dependency.",
+    entity(10, 240, 190, "CUSTOMER_ADDRESS", ["PK CustomerNo","PK Address"], "CUSTOMER_ADDRESS: one row per customer and address. The key is both columns. CustomerNo is also a foreign key.") +
+    G("Suppose customers can have any number of addresses. Then CustomerNo determines a group of addresses, not one value. This is a multi-valued dependency.",
       R(240, 250, 250, 50, "dashb", 6) + T(365, 270, "Multi-valued dependency:", "sm2 hd") + T(365, 288, "CustomerNo →→ Address", "sm2")) + `</g>`;
   return SVG(720, 340, "Normalizing ALL_SALES to first, second, third and fourth normal form", s);
 };
@@ -4052,12 +4493,12 @@ D.btree = () => {
     const lo = k === 0 ? `keys up to ${n[0]}` : k === 1 ? `keys after ${n[0]}, up to ${n[1]}` : `keys after ${n[1]}`;
     s += ptr(`n${j}${k}`, `M${L2X[j] + 60 * k} 128L${LX(3 * j + k) + 35} 168`, `Pointer to a leaf node: ${lo}.`);
   }));
-  LEAVES.forEach((_, i) => s += ptr("d" + i, `M${LX(i) + 35} 236L${275 + i * 21} 290`, "Leaf pointers lead to the records on disk. Each entry points at its own record."));
+  LEAVES.forEach((_, i) => s += ptr("d" + i, `M${LX(i) + 35} 236L${275 + i * 21} 290`, "Leaf pointers lead to the records on disk. Each entry points to its own record."));
   const node = (x, y, w, keys, tip, attr) => G(tip, R(x, y, w, 30, "b", 3) + P(`M${x + w / 2} ${y}V${y + 30}`) + T(x + w / 4, y + 20, keys[0], "sm2") + T(x + 3 * w / 4, y + 20, keys[1], "sm2"), attr);
   s += node(305, 18, 110, ["Harris","Peters"], "Root node: two key values and three pointers. Every search starts here.", 'data-n="root"');
-  L2.forEach((n, j) => s += node(L2X[j], 98, 120, n, `Second-level node: ${n[0]} | ${n[1]}. Keys are sorted left to right across the whole tree.`, `data-n="l${j}"`));
-  LEAVES.forEach((lf, i) => lf.forEach((nm, k) => s += G(`Leaf entry “${nm}”: points to that client’s record on disk.`, R(LX(i), 168 + 22 * k, 70, 22, "b", 0) + T(LX(i) + 35, 183 + 22 * k, nm, "sm2"), `data-e="${i}-${k}"`)));
-  s += G("The records themselves, on disk. The index only stores keys and pointers.", cyl(260, 288, 200, 52, "Records on disk"));
+  L2.forEach((n, j) => s += node(L2X[j], 98, 120, n, `Second-level node: ${n[0]} | ${n[1]}. Keys are sorted from left to right across the whole tree.`, `data-n="l${j}"`));
+  LEAVES.forEach((lf, i) => lf.forEach((nm, k) => s += G(`Leaf entry “${nm}”. It points to that client’s record on disk.`, R(LX(i), 168 + 22 * k, 70, 22, "b", 0) + T(LX(i) + 35, 183 + 22 * k, nm, "sm2"), `data-e="${i}-${k}"`)));
+  s += G("The records themselves, on disk. The index stores only keys and pointers.", cyl(260, 288, 200, 52, "Records on disk"));
   s += G("Levels of the tree.", T(712, 37, "root", "sm", "end") + T(712, 117, "level 2", "sm", "end"));
   s += T(712, 256, "leaves", "sm", "end");
   return SVG(720, 352, "A three-level B-tree index on surnames, with leaf pointers to records on disk", s);
@@ -4093,11 +4534,11 @@ D.access = () => SVG(720, 300, "Sequential, indexed and hashed access to records
 
 /* layers */
 const LAYERS = [
-  { id:"users", r:215, c:"b2", label:"Users and applications", ly:-192, tip:"Users and application programs. They never touch the database directly.", note:"<b>Users and applications.</b> People and programs reach every database through the DBMS, never directly." },
-  { id:"dbms", r:180, c:"b", label:"DBMS", ly:-152, tip:"The DBMS manages this database and possibly others, and controls all access to them.", note:"<b>DBMS.</b> Manages one or more databases and controls who can do what with them. Security, transactions and APIs also live here, though the book leaves them out of this picture." },
+  { id:"users", r:215, c:"b2", label:"Users and applications", ly:-192, tip:"Users and application programs. They never access the database directly.", note:"<b>Users and applications.</b> People and programs reach every database through the DBMS, never directly." },
+  { id:"dbms", r:180, c:"b", label:"DBMS", ly:-152, tip:"The DBMS manages this database, and possibly others. It controls all access to them.", note:"<b>DBMS.</b> It manages one or more databases and controls who can do what with them. Security, transactions and APIs also belong here, but the book leaves them out of this picture." },
   { id:"db", r:140, c:"b2", label:"DATABASE", ly:126, tip:"One database: the data and metadata plus the indexes and integrity rules around them.", note:"<b>Database.</b> Data, metadata, indexes and integrity rules together make up one database." },
-  { id:"rules", r:105, c:"b", label:"Integrity rules", ly:-82, tip:"Integrity rules wrap the data: entity, referential, domain and user-defined rules (section 2.6).", note:"<b>Integrity rules.</b> Built-in entity, referential and domain integrity, plus your own rules. Every change passes through them." },
-  { id:"idx", r:75, c:"b2", label:"Indexes", ly:-58, tip:"Indexes: physical access structures such as B-trees that speed up finding data (section 2.8).", note:"<b>Indexes.</b> Physical access structures that make finding data fast. Thanks to physical data independence, they never change what a query means." },
+  { id:"rules", r:105, c:"b", label:"Integrity rules", ly:-82, tip:"Integrity rules surround the data: entity, referential, domain and user-defined rules (section 2.6).", note:"<b>Integrity rules.</b> Built-in entity, referential and domain integrity, plus your own rules. Every change passes through them." },
+  { id:"idx", r:75, c:"b2", label:"Indexes", ly:-58, tip:"Indexes: physical access structures, such as B-trees, that make finding data faster (section 2.8).", note:"<b>Indexes.</b> Physical access structures that make finding data fast. Because of physical data independence, they never change what a query means." },
   { id:"core", r:48, c:"b", label:"", ly:0, tip:"The core: the data itself, and the metadata describing it.", note:"<b>Data and metadata.</b> The rows you store, plus the data dictionary describing every table, column, key, rule, index and user (section 2.7)." }
 ];
 D.layers = () => {
@@ -4122,9 +4563,9 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
 (function(){
   const p = plate("dmodel");
   const N = {
-    early:"<b>1960s: no DBMS.</b> Each program reads and writes the files itself. Move or restructure a file and every program that uses it must be rewritten.",
+    early:"<b>1960s: no DBMS.</b> Each program reads and writes the files itself. If you move a file or change its structure, every program that uses it must be rewritten.",
     logic:"<b>A logical data model.</b> Programs see only tables, rows and columns. The DBMS maps them to files. This separation is <em>physical data independence</em>.",
-    move:"<b>Storage reorganized.</b> The DBMS now spreads the data across three disks. The applications are unchanged: they were written to the logical model, and the DBMS vendor updates the mapping."
+    move:"<b>Storage reorganized.</b> The DBMS now spreads the data across three disks. The applications are unchanged, because they were written for the logical model. The DBMS vendor updates the mapping."
   };
   const show = (sel, on) => p.querySelectorAll(sel).forEach(g => g.style.display = on ? "" : "none");
   chips("dmBtns", [["early","1960s: no DBMS"],["logic","Logical data model"],["move","Storage reorganized"]], v => {
@@ -4141,7 +4582,7 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
     sets:"<b>Four sets.</b> Each holds values of one kind. A set has no order and no duplicates.",
     r0:"<b>Row 1.</b> Pick one value from each set: Jane Smith, Manager, London, 35000. That combination is one row.",
     r1:"<b>Row 2.</b> Richard Jones, Analyst, New York, 34000. Each column keeps drawing from its own set (its domain).",
-    rel:"<b>The relation.</b> All the chosen combinations together form EMPLOYEE. Formally a relation; in practice a table."
+    rel:"<b>The relation.</b> All the chosen combinations together form EMPLOYEE. Formally, it is a relation. In practice, it is a table."
   };
   chips("setBtns", [["sets","1 · The sets"],["r0","2 · Row 1"],["r1","3 · Row 2"],["rel","4 · The table"]], v => {
     const ri = v === "r0" ? 0 : v === "r1" ? 1 : -1;
@@ -4156,10 +4597,10 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
 (function(){
   const N = {
     orig:"<b>The original.</b> Try each change and see whether the table is still the same relation.",
-    shuffle:"<b>Rows shuffled: still the same table.</b> Rows have no order. Each row kept all its own values, so nothing about any employee changed. (In a spreadsheet, sorting one column alone can scramble data.)",
-    cols:"<b>Columns swapped: still the same table.</b> Whole columns moved, names and all, so every value still belongs to the right property.",
-    val:"<b>Two values swapped: broken.</b> Moving single values instead of whole columns turns the data into nonsense. Alex de Tocqueville now earns “Paris” and lives in “21000”, which is also outside each column’s domain.",
-    dup:"<b>Duplicate row: not allowed.</b> Each row is a distinct real-world thing. Two identical rows can’t be told apart, so a relation never contains them. This is the root of primary keys (section 2.4)."
+    shuffle:"<b>Rows shuffled: still the same table.</b> Rows have no order. Each row kept all its own values, so nothing about any employee changed. (In a spreadsheet, sorting only one column can mix up the data.)",
+    cols:"<b>Columns swapped: still the same table.</b> Whole columns moved, together with their names. So every value still belongs to the right property.",
+    val:"<b>Two values swapped: broken.</b> Moving single values instead of whole columns turns the data into nonsense. Alex de Tocqueville now earns “Paris” and lives in “21000”. These values are also outside each column’s domain.",
+    dup:"<b>Duplicate row: not allowed.</b> Each row is a different real-world thing. You can’t tell two identical rows apart, so a relation never contains them. This is the reason primary keys exist (section 2.4)."
   };
   chips("propBtns", [["orig","Original"],["shuffle","Shuffle rows"],["cols","Swap Name and Salary columns"],["val","Swap two values"],["dup","Duplicate a row"]], v => {
     $("propBody").innerHTML = propsBody(v); $("propNote").innerHTML = N[v];
@@ -4176,7 +4617,7 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
     const s = SALE[i]; rows(`[data-sale="${i}"]`).forEach(g => g.classList.add("cur"));
     rows(`[data-prod="${s[3]}"]`).forEach(g => g.classList.add("cur"));
     let msg = `<b>Sale ${s[0]}.</b> ProductNo ${s[3]} finds the ${PROD.find(x => x[0] === s[3])[1].toLowerCase()} in PRODUCT. `;
-    if (s[2] === "<null>") msg += "CustomerNo is null, perhaps a cash sale, so there is no customer to find. Referential integrity allows a null foreign key.";
+    if (s[2] === "<null>") msg += "CustomerNo is null. Perhaps it was a cash sale. So there is no customer to find. Referential integrity allows a null foreign key.";
     else { const c = CUST.find(x => x[0] === s[2]); rows(`[data-cust="${s[2]}"]`).forEach(g => g.classList.add("cur")); msg += `CustomerNo ${s[2]} finds ${c[1]} ${c[2]} in CUSTOMER.`; }
     $("fkNote").innerHTML = msg;
   }
@@ -4184,7 +4625,7 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
   const N = {
     none:"Click any SALE row to follow its two foreign keys to the parent rows. Or pick a property above.",
     unsold:"<b>Parents without children.</b> AAD62726 (left-handed doodad) and FGE91822 (grunge nut) never appear in SALE. A parent row doesn’t need any matching child rows.",
-    repeat:"<b>Foreign keys repeat.</b> Customer 1166-3461 appears in two sales and product DHU69863 in three. Primary keys must be unique; foreign keys needn’t be."
+    repeat:"<b>Foreign keys repeat.</b> Customer 1166-3461 appears in two sales and product DHU69863 in three. Primary keys must be unique. Foreign keys don’t need to be."
   };
   const pick = chips("fkBtns", [["none","Click a sale"],["unsold","Products never sold"],["repeat","Repeated foreign key values"]], v => {
     clear();
@@ -4202,10 +4643,10 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
 (function(){
   const N = {
     none:"<b>BIG_UGLY_TABLE.</b> Every sale row carries a full copy of its customer’s details. Pick a problem to see what that costs.",
-    red:"<b>Redundancy.</b> Amelia Waverley bought twice, so her details are stored twice (highlighted). Every new purchase adds another copy: about 50 bytes each, 500 MB over ten million sales.",
-    upd:"<b>Update anomaly.</b> Amelia moves. Someone updates sale 12347 to 12 New Road but misses sale 12349, so the table now gives her two addresses (red). Every copy has to be found and changed.",
+    red:"<b>Redundancy.</b> Amelia Waverley bought twice, so her details are stored twice (highlighted). Every new purchase adds another copy of about 50 bytes. Over ten million sales, that is 500 MB.",
+    upd:"<b>Update anomaly.</b> Amelia moves. Someone changes the address in sale 12347 to 12 New Road, but misses sale 12349. So the table now gives her two addresses (red). Every copy must be found and changed.",
     del:"<b>Delete anomaly.</b> Richard Johnston cancels sale 12345. Deleting that row also deletes the only copy of his customer details (red).",
-    ins:"<b>Insert anomaly.</b> A new customer hasn’t bought anything yet. With no sale, the key column SaleNo would be null, so the customer can’t be recorded at all. (Whether that matters depends on the business.)"
+    ins:"<b>Insert anomaly.</b> A new customer hasn’t bought anything yet. There is no sale, so the key column SaleNo would be null. This means the customer can’t be recorded at all. (Whether this matters depends on the business.)"
   };
   chips("bugBtns", [["none","The table"],["red","Redundancy"],["upd","Update anomaly"],["del","Delete anomaly"],["ins","Insert anomaly"]], v => {
     $("bugBody").innerHTML = bugBody(v); $("bugNote").innerHTML = N[v];
@@ -4216,10 +4657,10 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
 (function(){
   const p = plate("normal");
   const N = {
-    "1":"<b>1NF.</b> ALL_SALES has no repeating groups (every cell holds one value), so it is already in first normal form, as every table is. The only obvious key is ProductNo + CustomerNo + SaleNo. The brackets show the functional dependencies hiding inside.",
-    "2":"<b>2NF.</b> Columns that depend on only part of the key (a partial dependency) are split off, each group with its own key. The result is the original PRODUCT, CUSTOMER and SALE: they were in 2NF all along. Definition: every column depends on the <em>whole</em> key.",
-    "3":"<b>3NF.</b> The book adds supplier details to PRODUCT. SupplierName and SupplierAddress depend on SupplierCode, which depends on ProductNo: a <em>transitive</em> dependency. Split them into SUPPLIER and keep SupplierCode as a foreign key. Definition: every column depends on the key <em>alone</em>.",
-    "4":"<b>4NF.</b> Now customers may have any number of addresses. CustomerNo determines a <em>collection</em> of addresses (a multi-valued dependency, not a repeating group: each cell still holds one value). Move addresses to CUSTOMER_ADDRESS, keyed on both columns."
+    "1":"<b>1NF.</b> ALL_SALES has no repeating groups (every cell holds one value). So it is already in first normal form, like every table. The only obvious key is ProductNo + CustomerNo + SaleNo. The brackets show the functional dependencies hidden inside it.",
+    "2":"<b>2NF.</b> Some columns depend on only part of the key (a partial dependency). These columns are split off, and each group gets its own key. The result is the original PRODUCT, CUSTOMER and SALE tables. They were in 2NF from the start. Definition: every column depends on the <em>whole</em> key.",
+    "3":"<b>3NF.</b> The book adds supplier details to PRODUCT. SupplierName and SupplierAddress depend on SupplierCode, and SupplierCode depends on ProductNo. This is a <em>transitive</em> (indirect) dependency. Move them into SUPPLIER, and keep SupplierCode as a foreign key. Definition: every column depends on the key <em>alone</em>.",
+    "4":"<b>4NF.</b> Now customers may have any number of addresses. CustomerNo determines a <em>collection</em> (a group) of addresses. This is a multi-valued dependency. It is not a repeating group, because each cell still holds one value. Move the addresses to CUSTOMER_ADDRESS. Its key is both columns."
   };
   chips("nfBtns", [["1","1NF"],["2","2NF"],["3","3NF"],["4","4NF"]], v => {
     p.querySelectorAll(".nf").forEach(g => g.style.display = g.dataset.nf === v ? "" : "none");
@@ -4230,11 +4671,11 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
 /* nulls */
 (function(){
   const S = {
-    gt:"<b>null &gt; 2000 → unknown.</b> You can’t compare “no value” with 2000, any more than you can ask whether a fish is greater than 2000. In a <code>WHERE</code> clause, unknown behaves like false, so the row is left out.",
+    gt:"<b>null &gt; 2000 → unknown.</b> You can’t compare “no value” with 2000. It is like asking whether a fish is greater than 2000. In a <code>WHERE</code> clause, unknown behaves like false, so the row is left out.",
     add:"<b>null + 2000 → null.</b> Arithmetic with a missing value gives a missing result.",
-    eq:"<b>null = null → unknown, not true.</b> Two unknowns aren’t known to be equal. That’s why SQL has <code>IS NULL</code>, and why a primary key can’t contain nulls: uniqueness couldn’t be checked.",
-    avg:"<b>AVG(CreditLimit) → 1250.</b> The book’s CUSTOMER credit limits are 1000, null, null, 1500, null. AVG skips nulls, so it averages two values. Counting the nulls as 0 would give 500. Know which you mean.",
-    zero:"<b>0 vs null.</b> A credit limit of 0 says the customer has credit, with a zero limit. Null says credit doesn’t apply. The book calls this picky but important to the business."
+    eq:"<b>null = null → unknown, not true.</b> We don’t know that two unknown values are equal. That is why SQL has <code>IS NULL</code>. It is also why a primary key can’t contain nulls: the DBMS couldn’t check uniqueness.",
+    avg:"<b>AVG(CreditLimit) → 1250.</b> The book’s CUSTOMER credit limits are 1000, null, null, 1500, null. AVG skips nulls, so it averages two values. Counting the nulls as 0 would give 500. Be clear about which one you mean.",
+    zero:"<b>0 vs null.</b> A credit limit of 0 says the customer has credit, with a zero limit. Null says credit doesn’t apply. The book says this difference is a small detail, but it is important to the business."
   };
   chips("nullBtns", [["gt","null > 2000"],["add","null + 2000"],["eq","null = null"],["avg","AVG(CreditLimit)"],["zero","0 or null?"]], v => { $("nullNote").innerHTML = S[v]; });
   $("nullNote").innerHTML = "Pick an expression to see how a DBMS treats null.";
@@ -4243,13 +4684,13 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
 /* integrity */
 (function(){
   const S = {
-    dupk:"<b>Rejected: entity integrity.</b> Inserting a second customer 4649-4673 would duplicate a primary key. Built into the relational model, so the DBMS always enforces it.",
+    dupk:"<b>Rejected: entity integrity.</b> Inserting a second customer 4649-4673 would duplicate a primary key. This rule is built into the relational model, so the DBMS always enforces it.",
     nullpk:"<b>Rejected: entity integrity.</b> A product with a null ProductNo. No part of a primary key may be null.",
     badfk:"<b>Rejected: referential integrity.</b> A sale for customer 9999-0000, who doesn’t exist. A foreign key must match a parent key or be null.",
     nullfk:"<b>Accepted.</b> A sale with a null CustomerNo (a cash sale, like 12348). Referential integrity explicitly allows a null foreign key.",
-    credit:"<b>Rejected, if you defined the rule.</b> A credit limit of 7000 breaks the book’s user-defined rule “0–5000 or null”. It’s user-defined, so it’s only enforced if someone implemented it.",
-    disc:"<b>Accepted, unfortunately.</b> A 40% discount. Everyone “knows” the limit is 30%, but nobody wrote the rule into the database, so nothing stops a program. Undocumented rules aren’t rules.",
-    typo:"<b>Accepted.</b> An employee called “Brain Watlers”. Perfectly valid, probably wrong. Integrity rules ensure validity, not correctness; double entry or verification catches typos."
+    credit:"<b>Rejected, if you defined the rule.</b> A credit limit of 7000 breaks the book’s user-defined rule “0–5000 or null”. The rule is user-defined, so it is enforced only if someone implemented it.",
+    disc:"<b>Accepted, unfortunately.</b> A 40% discount. Everyone “knows” the limit is 30%. But nobody wrote the rule into the database, so nothing stops a program. A rule that is not written down is not really a rule.",
+    typo:"<b>Accepted.</b> An employee called “Brain Watlers”. The name is fully valid, but probably wrong. Integrity rules make sure data is valid, not that it is correct. Double entry or verification catches typos."
   };
   chips("intBtns", [["dupk","Duplicate CustomerNo"],["nullpk","Null ProductNo"],["badfk","Sale for customer 9999-0000"],["nullfk","Sale with no customer"],["credit","Credit limit 7000"],["disc","40% discount"],["typo","Name “Brain Watlers”"]], v => { $("intNote").innerHTML = S[v]; });
   $("intNote").innerHTML = "Pick a change to see whether the database should accept it, and which rule decides.";
@@ -4259,9 +4700,9 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
 (function(){
   const p = plate("btree");
   const SEARCH = {
-    tudor:{ nodes:["root","l2"], ptrs:["r2","n21","d7"], hit:["7-1"], note:"<b>Find “Tudor” (the book’s example).</b> At the root, Tudor comes after Peters: take the right pointer. At “Smith | Walton”, Tudor is after Smith and up to Walton: middle pointer. Scan the leaf to Tudor and follow its pointer to the record. At worst 4 disk reads; usually 1, since a small index stays in RAM." },
-    ellis:{ nodes:["root","l0"], ptrs:["r0","n01","d1"], hit:["1-1"], note:"<b>Find “Ellis”.</b> Ellis is up to Harris: left pointer. At “Chen | Fenton”, Ellis is after Chen and up to Fenton: middle pointer. The leaf holds Davis, Ellis, Fenton." },
-    s:{ nodes:["root","l2"], ptrs:["r2","n20","d6"], hit:["6-1","6-2"], peek:["7-0"], note:"<b>Range: surnames starting with S.</b> Search for the first key from “S”: right at the root, left at “Smith | Walton”. Then scan rightwards: Smith, Smith, then Tong, which is past S, so stop. Sorted keys make range retrievals cheap." }
+    tudor:{ nodes:["root","l2"], ptrs:["r2","n21","d7"], hit:["7-1"], note:"<b>Find “Tudor” (the book’s example).</b> At the root, Tudor comes after Peters, so take the right pointer. At “Smith | Walton”, Tudor is after Smith and up to Walton, so take the middle pointer. Scan the leaf until you reach Tudor. Then follow its pointer to the record. At worst this needs 4 disk reads. Usually it needs 1, because a small index stays in RAM." },
+    ellis:{ nodes:["root","l0"], ptrs:["r0","n01","d1"], hit:["1-1"], note:"<b>Find “Ellis”.</b> Ellis is in the range up to Harris, so take the left pointer. At “Chen | Fenton”, Ellis is after Chen and up to Fenton, so take the middle pointer. The leaf holds Davis, Ellis and Fenton." },
+    s:{ nodes:["root","l2"], ptrs:["r2","n20","d6"], hit:["6-1","6-2"], peek:["7-0"], note:"<b>Range: surnames starting with S.</b> Search for the first key from “S” onwards. Go right at the root, then left at “Smith | Walton”. Then scan to the right: Smith, Smith, then Tong. Tong comes after S, so stop. Sorted keys make range retrievals cheap." }
   };
   function run(k){
     const q = SEARCH[k];
@@ -4271,17 +4712,17 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
     $("btNote").innerHTML = q.note;
   }
   chips("btBtns", [["tudor","Find Tudor"],["ellis","Find Ellis"],["s","Range: starts with S"]], run);
-  $("btNote").innerHTML = "Pick a search to trace its path through the tree. Hover any node or pointer for its rule.";
+  $("btNote").innerHTML = "Pick a search to trace its path through the tree. Hover over any node or pointer to see its rule.";
 })();
 
 /* access methods */
 (function(){
   const N = {
-    seq:"<b>Sequential access.</b> Start at block 1 and read until Tudor appears in block 8. On average you read half the file; with fifty million records, that’s hopeless.",
-    idx:"<b>Indexed access.</b> The B-tree says Tudor is in block 8, so only that block is read. Typically under ten reads even for huge tables, and often one if the index is cached.",
+    seq:"<b>Sequential access.</b> Start at block 1 and read until Tudor appears in block 8. On average you read half the file. With fifty million records, that is far too slow.",
+    idx:"<b>Indexed access.</b> The B-tree says Tudor is in block 8, so only that block is read. This usually takes fewer than ten reads, even for huge tables. It often takes just one if the index is cached (kept in memory).",
     hash:"<b>Direct access.</b> The hash function turns “Tudor” into a disk location, block 3, in one step. Hashing also <em>decided</em> that Tudor would be stored there.",
     ridx:"<b>Range with an index.</b> Records with similar keys tend to be stored close together, so both Smiths come back in one block read.",
-    rhash:"<b>Range with hashing.</b> Hashing scatters neighbouring keys (the two Smiths are in blocks 2 and 6), and the function can only answer exact keys. A range query falls back to reading everything. (The full-scan fallback is the course’s addition.)"
+    rhash:"<b>Range with hashing.</b> Hashing spreads neighbouring keys apart (the two Smiths are in blocks 2 and 6). Also, the function can only answer exact keys. So a range query has to read everything. (This full-scan fallback is the course’s addition.)"
   };
   chips("accBtns", [["seq","Sequential"],["idx","Indexed"],["hash","Direct (hash)"],["ridx","Range, indexed"],["rhash","Range, hashed"]], v => {
     $("accBody").innerHTML = accessBody(v); $("accNote").innerHTML = N[v];
@@ -4302,16 +4743,16 @@ document.querySelectorAll("[data-dg]").forEach(el => { const f = D[el.dataset.dg
 
 /* ---------- quiz ---------- */
 const QUIZ = [
-  ["What does physical data independence let you do?", ["Store data without a DBMS","Change how data is stored without rewriting programs written to the logical model","Use spreadsheets as databases","Skip primary keys"], 1, "Programs talk to the logical model; the DBMS handles the mapping to physical storage, so storage can change underneath them."],
+  ["What does physical data independence let you do?", ["Store data without a DBMS","Change how data is stored without rewriting programs written to the logical model","Use spreadsheets as databases","Skip primary keys"], 1, "Programs talk to the logical model. The DBMS maps it to physical storage, so storage can change without affecting the programs."],
   ["Which are the three aspects of a data model?", ["Tables, rows and columns","Structure, integrity and operations","Data, metadata and indexes","Entity, referential and domain"], 1, "Structure (how data is represented), integrity (keeping it valid) and operations (manipulating it)."],
-  ["Which change produces a different table?", ["Shuffling the rows","Swapping two whole columns","Swapping one employee’s Location and Salary values","Reading the columns right to left"], 2, "Row and column order don’t matter, but moving individual values changes the data itself."],
-  ["Why is a null CreditLimit better than 0 for a customer who isn’t allowed credit?", ["0 takes more space","0 says they have credit with a zero limit; null says credit doesn’t apply","Nulls are faster","SQL doesn’t allow 0"], 1, "The book calls the distinction picky but important: 0 is a real limit, null means inapplicable."],
+  ["Which change produces a different table?", ["Shuffling the rows","Swapping two whole columns","Swapping one employee’s Location and Salary values","Reading the columns right to left"], 2, "Row and column order don’t matter. But moving single values changes the data itself."],
+  ["Why is a null CreditLimit better than 0 for a customer who isn’t allowed credit?", ["0 takes more space","0 says they have credit with a zero limit; null says credit doesn’t apply","Nulls are faster","SQL doesn’t allow 0"], 1, "The book says the difference is a small detail, but important. 0 is a real limit. Null means the limit does not apply."],
   ["Credit limits are 1000, null, null, 1500, null. What does AVG return?", ["500","1250","null","An error"], 1, "AVG ignores nulls, so it averages 1000 and 1500."],
   ["Which statement about foreign keys is true?", ["Each table can have only one","Values must be unique in the child table","A value must match a parent key or be null","They must be single columns"], 2, "That’s referential integrity. Foreign keys can repeat, can be composite, and a table can have several."],
-  ["In BIG_UGLY_TABLE, deleting Richard Johnston’s only sale also loses his customer details. What is this called?", ["An insert anomaly","An update anomaly","A delete anomaly","Denormalization"], 2, "Losing unrelated facts when you delete a row is a delete anomaly."],
-  ["PRODUCT has SupplierCode, SupplierName and SupplierAddress, and ProductNo → SupplierCode → SupplierName. Which normal form does it break?", ["1NF","2NF","3NF","4NF"], 2, "A transitive dependency breaks 3NF; the fix is a separate SUPPLIER table with SupplierCode kept as a foreign key."],
-  ["Spot the mistake: “Our discount limit is 30%, everyone knows that, so the database is safe.”", ["Nothing is wrong","A user-defined rule only protects data if it is actually implemented, ideally in the database","Discounts should be stored as null","It should be an entity integrity rule"], 1, "User-defined rules are optional; if nobody implements the rule, any program can break it."],
-  ["Which access method is the worst choice for “all customers whose surname starts with S”?", ["A B-tree index","Hashing","It makes no difference","A primary key index"], 1, "Hashing scatters neighbouring keys and answers only exact keys; B-trees keep keys sorted, ideal for range retrievals."]
+  ["In BIG_UGLY_TABLE, deleting Richard Johnston’s only sale also loses his customer details. What is this called?", ["An insert anomaly","An update anomaly","A delete anomaly","Denormalization"], 2, "Deleting a row and losing other, unrelated facts with it is a delete anomaly."],
+  ["PRODUCT has SupplierCode, SupplierName and SupplierAddress, and ProductNo → SupplierCode → SupplierName. Which normal form does it break?", ["1NF","2NF","3NF","4NF"], 2, "A transitive dependency breaks 3NF. The fix is a separate SUPPLIER table, with SupplierCode kept in PRODUCT as a foreign key."],
+  ["Spot the mistake: “Our discount limit is 30%, everyone knows that, so the database is safe.”", ["Nothing is wrong","A user-defined rule only protects data if it is actually implemented, ideally in the database","Discounts should be stored as null","It should be an entity integrity rule"], 1, "User-defined rules are optional. If nobody implements the rule, any program can break it."],
+  ["Which access method is the worst choice for “all customers whose surname starts with S”?", ["A B-tree index","Hashing","It makes no difference","A primary key index"], 1, "Hashing spreads neighbouring keys apart and answers only exact keys. B-trees keep keys sorted, which is ideal for range retrievals."]
 ];
 const quizEl = $("quiz"); let answered = 0, right = 0;
 function buildQuiz(){
