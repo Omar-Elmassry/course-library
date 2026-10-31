@@ -330,11 +330,29 @@ figure.is-fs:has(.controls) .dg,figure.is-fs:has(.events) .dg{max-height:calc(10
 }
 
 /* ---------- highlights, reading position ---------- */
-.hl-yellow{--hl:rgba(255,210,0,.45);--hlc:#f2c200}
-.hl-green{--hl:rgba(60,190,110,.33);--hlc:#33b06a}
-.hl-blue{--hl:rgba(70,150,255,.30);--hlc:#3d8bfd}
-.hl-pink{--hl:rgba(255,90,170,.30);--hlc:#f0569f}
-mark.hl{background:var(--hl);color:inherit;border-radius:3px;padding:.05em 0;-webkit-box-decoration-break:clone;box-decoration-break:clone;cursor:pointer}
+.hl-yellow{--hl:rgba(255,241,0,.40);--hlc:#ffe600}
+.hl-green{--hl:rgba(100,255,100,.30);--hlc:#5ee85e}
+.hl-blue{--hl:rgba(80,200,255,.28);--hlc:#4cc3ff}
+.hl-pink{--hl:rgba(255,100,210,.24);--hlc:#ff6fd2}
+mark.hl{background:var(--hl);color:inherit;border-radius:2px;padding:.08em .02em;mix-blend-mode:multiply;-webkit-box-decoration-break:clone;box-decoration-break:clone;cursor:pointer}
+html[data-theme="night"] mark.hl{mix-blend-mode:normal}
+html[data-theme="night"] .hl-yellow{--hl:rgba(255,230,0,.26)}
+html[data-theme="night"] .hl-green{--hl:rgba(100,255,100,.20)}
+html[data-theme="night"] .hl-blue{--hl:rgba(80,200,255,.22)}
+html[data-theme="night"] .hl-pink{--hl:rgba(255,100,210,.22)}
+.hlmode{position:fixed;top:calc(var(--bar) + 10px);right:16px;z-index:45;display:flex;align-items:center;gap:7px;padding:6px 6px 6px 12px;background:var(--surface);border:1px solid var(--rule);border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.15);font:600 13px var(--sans);color:var(--text)}
+.hlmode[hidden]{display:none}
+.hlmode .hlc{width:22px;height:22px}
+.hlmode .off{height:28px;border:1px solid var(--rule);background:var(--bg);color:var(--text);border-radius:999px;padding:0 10px;font:600 13px var(--sans);cursor:pointer}
+@media (pointer:coarse){.hlmode .hlc{width:28px;height:28px}.hlmode .off{height:32px}}
+#hlBtn.mode-on{border-color:var(--accent);background:var(--accent-soft)}
+.hlmoderow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:10px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--bg)}
+.hlmoderow b{display:block;font-size:14px}
+.hlmoderow small{display:block;color:var(--muted);font-size:12.5px;line-height:1.35;margin-top:2px}
+.switch{flex:none;position:relative;width:46px;height:26px;border-radius:999px;border:1px solid var(--rule);background:var(--code-bg);cursor:pointer;padding:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.switch[aria-checked="true"]{background:var(--accent);border-color:var(--accent)}
+.switch[aria-checked="true"]::after{transform:translateX(20px)}
 mark.hl.flash{animation:hlflash 1.8s ease}
 @keyframes hlflash{0%,60%{box-shadow:0 0 0 3px var(--hlc)}100%{box-shadow:0 0 0 0 transparent}}
 .hltool{position:absolute;z-index:70;display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--surface);border:1px solid var(--rule);border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-family:var(--sans)}
@@ -933,17 +951,26 @@ tool.addEventListener("click", e => {
   if (forId) { if (b.dataset.x) removeH(forId); else recolor(forId, b.dataset.c); hideTool(); return; }
   if (b.dataset.c) addHighlight(b.dataset.c);
 });
-let mouseDown = false, selTimer = null;
+/* highlighter mode: when on, every selection in the text is highlighted at once */
+const HMK = "course-library-highlighter";
+let HM = Object.assign({ on: false, color: "yellow" }, loadJSON(HMK, {}));
+if (!COLORS.includes(HM.color)) HM.color = "yellow";
+let mouseDown = false, touching = false, selTimer = null;
 document.addEventListener("pointerdown", e => { if (e.pointerType === "mouse" && !tool.contains(e.target)) mouseDown = true; });
 document.addEventListener("pointerup", e => { if (e.pointerType === "mouse") { mouseDown = false; setTimeout(checkSel, 10); } });
-document.addEventListener("selectionchange", () => { clearTimeout(selTimer); selTimer = setTimeout(checkSel, 300); });
+document.addEventListener("touchstart", () => { touching = true; }, { passive: true });
+document.addEventListener("touchend", () => { touching = false; clearTimeout(selTimer); selTimer = setTimeout(checkSel, HM.on ? 700 : 300); }, { passive: true });
+document.addEventListener("touchcancel", () => { touching = false; }, { passive: true });
+/* on touch, wait longer in highlighter mode so you can still drag the selection handles */
+document.addEventListener("selectionchange", () => { clearTimeout(selTimer); selTimer = setTimeout(checkSel, HM.on ? 700 : 300); });
 function checkSel(){
-  if (mouseDown) return;
+  if (mouseDown || (HM.on && touching)) return;
   const sel = getSelection(), art = article();
   if (!sel || !sel.rangeCount || sel.isCollapsed) { if (!tool.dataset.for) hideTool(); return; }
   const r = sel.getRangeAt(0);
   if (!art || !art.contains(r.commonAncestorContainer) || !rangeOffsets(r, textIndex(art))) { if (!tool.dataset.for) hideTool(); return; }
   savedRange = r.cloneRange();
+  if (HM.on) { addHighlight(HM.color); return; }
   const rects = r.getClientRects(), last = rects.length ? rects[rects.length - 1] : r.getBoundingClientRect();
   showTool(last, null);
 }
@@ -966,6 +993,7 @@ const hlPanel = document.createElement("div");
 hlPanel.className = "panel hlpanel"; hlPanel.id = "hlPanel"; hlPanel.hidden = true;
 hlPanel.setAttribute("role", "dialog"); hlPanel.setAttribute("aria-labelledby", "hlTitle");
 hlPanel.innerHTML = `<h2><span id="hlTitle">My highlights</span><button id="hlClose" aria-label="Close highlights">×</button></h2>
+  <div class="hlmoderow"><div><b id="hlModeLab">Highlighter</b><small>When it is on, any text you select is highlighted at once.</small></div><button type="button" class="switch" id="hlModeSw" role="switch" aria-checked="false" aria-labelledby="hlModeLab"></button></div>
   <div class="hlfilter" role="group" aria-label="Show color">
     <button type="button" class="hlf" data-f="all" aria-pressed="true">All</button>` +
     COLORS.map(c => `<button type="button" class="hlf hl-${c}" data-f="${c}" aria-pressed="false"><i></i>${c[0].toUpperCase() + c.slice(1)}</button>`).join("") + `
@@ -975,6 +1003,25 @@ hlPanel.innerHTML = `<h2><span id="hlTitle">My highlights</span><button id="hlCl
   <input type="file" id="hlImport" accept="application/json,.json" hidden>
   <p class="hlhelp">To highlight, select words in a chapter and pick a color. Tap a highlight to change its color or remove it. Highlights and your reading place are saved in this browser only. Use Export and Import to move them to another device.</p>`;
 document.body.appendChild(hlPanel);
+const hmPill = document.createElement("div");
+hmPill.className = "hlmode"; hmPill.hidden = true; hmPill.setAttribute("role", "group"); hmPill.setAttribute("aria-label", "Highlighter");
+document.body.appendChild(hmPill);
+function setHM(patch){
+  Object.assign(HM, patch); saveJSON(HMK, { on: HM.on, color: HM.color });
+  hmPill.innerHTML = `<span>Highlighter</span>` + COLORS.map(c => `<button type="button" class="hlc hl-${c}${HM.color === c ? " on" : ""}" data-c="${c}" aria-label="Highlighter color ${c}" aria-pressed="${HM.color === c}" title="${c}"></button>`).join("") +
+    `<button type="button" class="off">Turn off</button>`;
+  hmPill.hidden = !HM.on;
+  $("hlModeSw").setAttribute("aria-checked", HM.on);
+  hlBtn.classList.toggle("mode-on", HM.on);
+  if (HM.on) hideTool();
+}
+hmPill.addEventListener("mousedown", e => e.preventDefault());
+hmPill.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.classList.contains("off")) setHM({ on: false }); else if (b.dataset.c) setHM({ color: b.dataset.c });
+});
+$("hlModeSw").addEventListener("click", () => setHM({ on: !HM.on }));
+setHM({});
 function openHL(open){
   hlPanel.hidden = !open; hlBtn.setAttribute("aria-expanded", open);
   if (open) { openPanel(false); hideTool(); renderHLList(); $("hlClose").focus(); }
