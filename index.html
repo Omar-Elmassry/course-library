@@ -1028,7 +1028,8 @@ function openHL(open){
 }
 hlBtn.addEventListener("click", () => openHL(hlPanel.hidden));
 $("hlClose").addEventListener("click", () => { openHL(false); hlBtn.focus(); });
-document.addEventListener("click", e => { if (!hlPanel.hidden && !hlPanel.contains(e.target) && !hlBtn.contains(e.target)) openHL(false); });
+/* use the click path, not e.target: deleting an item re-renders the list, so the clicked button is no longer in the panel */
+document.addEventListener("click", e => { const path = e.composedPath(); if (!hlPanel.hidden && !path.includes(hlPanel) && !path.includes(hlBtn)) openHL(false); });
 setBtn.addEventListener("click", () => { if (!hlPanel.hidden) openHL(false); });
 hlPanel.querySelectorAll(".hlf").forEach(b => b.addEventListener("click", () => {
   hlFilter = b.dataset.f; hlPanel.querySelectorAll(".hlf").forEach(x => x.setAttribute("aria-pressed", x === b)); renderHLList();
